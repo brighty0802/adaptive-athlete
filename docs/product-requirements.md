@@ -121,7 +121,7 @@ Completed workouts must be stored so the athlete can review them later.
 ---
 
 ### REQ-10 — Monthly Training Adherence Graphic
-**Priority:** Should
+**Priority:** Must
 
 The app should provide a monthly visual graphic showing each day of the month as a box.
 
@@ -167,21 +167,55 @@ The system should be built so training logic, UI, and analytics can be developed
 
 ## MVP Definition
 
-The MVP is successful if the athlete can:
+## MVP Scope
 
-1. view the four gym sessions
-2. see the last completed session
-3. see the recommended session for today
-4. open a workout
-5. start the workout
-6. see each exercise with previous and proposed loads
-7. log what was completed
-8. mark prescribed work as completed quickly
-9. complete exercises in any order
-10. save a partial or full session
-11. view a monthly training adherence graphic
+The first usable version of Adaptive Athlete must support:
+
+- Today screen
+- Recommended next workout
+- Manual workout selection
+- Workout Detail screen
+- Active Workout screen
+- Logging weight, repetitions and RIR
+- Previous exercise performance
+- Recommended exercise load
+- Quick "completed as prescribed" input
+- Flexible exercise order
+- Skipped exercises
+- Partial workout completion
+- Persistent workout history
+- Deterministic double-progression rules
+- Monthly training adherence calendar
 
 
+### MVP Session Recommendation Rule
 
+The initial application will recommend sessions using a fixed four-session rotation:
 
+Lower A → Upper A → Lower B → Upper B → repeat.
 
+A completed workout advances the rotation.
+
+A workout intentionally finished as `partial` also advances the rotation.
+
+An unfinished `in_progress` workout does not advance the rotation.
+
+The athlete may manually select a different workout at any time. This is important as gives user freedom to choose. 
+
+Football-aware scheduling will replace or modify this simple rotation in a later version.
+
+## Out of Scope for Initial MVP
+
+The following are intentionally deferred:
+
+- Automatic football-load adaptation
+- Recovery/readiness modelling
+- Garmin or wearable integration
+- Advanced performance dashboards
+- Power BI integration
+- AI-generated coaching
+- Machine learning
+- Multi-athlete accounts
+- Coach accounts
+- Automatic 146-day phase transitions
+- PWA installation features

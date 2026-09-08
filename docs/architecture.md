@@ -580,7 +580,7 @@ Previous:
 75 kg × 6 / 6 / 5
 
 Recommended:
-77.5 kg
+75 kg
 ```
 
 The purpose of this stage is to:
