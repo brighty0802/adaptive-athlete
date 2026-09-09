@@ -1,13 +1,12 @@
-import Link from "next/link";
 import { Icon } from "./icon";
 
-export function BottomNavigation() {
+export function BottomNavigation({ onToday, isToday }: { onToday: () => void; isToday: boolean }) {
   return (
     <nav className="bottom-nav" aria-label="Main navigation">
-      <Link href="/" aria-current="page">
+      <button type="button" onClick={onToday} aria-current={isToday ? "page" : undefined}>
         <Icon name="today" />
         <span>Today</span>
-      </Link>
+      </button>
       {(["History", "Progress", "More"] as const).map((label) => (
         <button type="button" disabled key={label} aria-label={`${label}, coming soon`}>
           <Icon name={label === "History" ? "history" : label === "Progress" ? "progress" : "more"} />

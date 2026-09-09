@@ -1,9 +1,10 @@
-import { TodayScreen } from "@/components/today-screen";
+import { WorkoutFlow } from "@/components/workout-flow";
 import { getMockTodayData } from "@/data/mock-today";
+import { mockWorkoutDefinitions } from "@/data/mock-workouts";
 
 // Render the calendar date per request, rather than freezing it at build time.
 export const dynamic = "force-dynamic";
 
 export default function TodayPage() {
-  return <TodayScreen data={getMockTodayData(new Date())} />;
+  return <WorkoutFlow initialData={getMockTodayData(new Date())} workouts={mockWorkoutDefinitions} />;
 }

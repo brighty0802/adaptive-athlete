@@ -1,31 +1,17 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import type { TodayData } from "@/types/workout";
+import type { TodayData, WorkoutId } from "@/types/workout";
 import { formatCalendarDate } from "@/lib/dates";
 import { AdherencePreview } from "./adherence-preview";
-import { BottomNavigation } from "./bottom-navigation";
 import { Icon } from "./icon";
 import { WorkoutCard } from "./workout-card";
 
-export function TodayScreen({ data }: { data: TodayData }) {
+export function TodayScreen({ data, onOpenWorkout }: { data: TodayData; onOpenWorkout: (id: WorkoutId) => void }) {
   const recommended = data.workouts.find((workout) => workout.id === data.recommendedWorkoutId)!;
   const last = data.workouts.find((workout) => workout.id === data.lastCompletedWorkout.workoutId)!;
-  const [selected, setSelected] = useState(recommended);
-  const [startNotice, setStartNotice] = useState(false);
 
   return (
-    <div className="app-shell">
-      <a className="skip-link" href="#main">Skip to content</a>
-      <header className="brand-header">
-        <Link href="/" className="brand" aria-label="Adaptive Athlete home">
-          <Icon name="brand" />
-          <span>ADAPTIVE<span>ATHLETE</span></span>
-        </Link>
-        <span className="demo-badge">Preview</span>
-      </header>
-      <main id="main">
+    <>
         <div className="welcome">
           <time dateTime={data.today}>
             {formatCalendarDate(data.today, { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
@@ -39,32 +25,30 @@ export function TodayScreen({ data }: { data: TodayData }) {
               <div className="section-heading">
                 <p className="eyebrow">
                   <span className="live-dot" />
-                  {selected.id === recommended.id ? "NEXT UP TODAY" : "YOUR SELECTION"}
+                  NEXT UP TODAY
                 </p>
-                <span className="pill">{selected.id === recommended.id ? "Recommended" : "Selected"}</span>
+                <span className="pill">Recommended</span>
               </div>
               <div className="hero-workout">
                 <span className="hero-icon"><Icon name="dumbbell" /></span>
                 <div>
-                  <h2 id="next-workout-heading">{selected.name}</h2>
-                  <p>{selected.focus}</p>
+                  <h2 id="next-workout-heading">{recommended.name}</h2>
+                  <p>{recommended.focus}</p>
                 </div>
               </div>
               <div className="hero-meta">
-                <span><Icon name="clock" />~{selected.estimatedDurationMinutes} minutes</span>
-                <span>{selected.exerciseCount} exercises</span>
+                <span><Icon name="clock" />~{recommended.estimatedDurationMinutes} minutes</span>
+                <span>{recommended.exerciseCount} exercises</span>
               </div>
-              <button type="button" className="start-button" onClick={() => setStartNotice(true)}>
-                Start Workout<Icon name="arrow" />
+              <button type="button" className="start-button" onClick={() => onOpenWorkout(recommended.id)}>
+                View Workout<Icon name="arrow" />
               </button>
-              <p className="start-note" role="status">
-                {startNotice ? "Workout logging is coming next. Your session hasn’t started." : "Workout logging coming soon"}
-              </p>
+              <p className="start-note">Review your workout, then start when you’re ready.</p>
             </section>
             <section className="last-workout panel" aria-label="Last completed workout">
               <span className="completed-icon"><Icon name="check" /></span>
               <div>
-                <p className="eyebrow">LAST COMPLETED</p>
+                <p className="eyebrow">LAST COMPLETED{data.lastCompletedWorkout.status === "partial" ? " · PARTIAL" : ""}</p>
                 <h2>{last.name} <span>— {last.focus}</span></h2>
                 <p>
                   <time dateTime={data.lastCompletedWorkout.date}>
@@ -83,11 +67,8 @@ export function TodayScreen({ data }: { data: TodayData }) {
                   <WorkoutCard
                     key={workout.id}
                     workout={workout}
-                    selected={workout.id === selected.id}
-                    onSelect={() => {
-                      setSelected(workout);
-                      setStartNotice(false);
-                    }}
+                    recommended={workout.id === recommended.id}
+                    onOpen={() => onOpenWorkout(workout.id)}
                   />
                 ))}
               </div>
@@ -98,15 +79,13 @@ export function TodayScreen({ data }: { data: TodayData }) {
           </div>
           <aside className="activity-column">
             <AdherencePreview today={data.today} sessions={data.completedWorkouts} workouts={data.workouts} />
-            <p className="sample-note">Sample workouts and activity for this preview.</p>
+            <p className="sample-note">Preview activity · refresh clears newly logged workouts.</p>
             <div className="brand-footer" aria-hidden="true">
               <Icon name="brand" />
               <p>STRONGER TODAY.<br />FASTER TOMORROW.</p>
             </div>
           </aside>
         </div>
-      </main>
-      <BottomNavigation />
-    </div>
+    </>
   );
 }
