@@ -165,6 +165,13 @@ The app should support non-linear workout execution, including exercise reorderi
 ### NFR-05 — Maintainability
 The system should be built so training logic, UI, and analytics can be developed separately.
 
+
+### NFR-06 - Remote Accessibility 
+
+Adaptive Athlete must be accessible from a mobile phone over the internet and must not depend on the developer's local computer being switched on or connected to the same network.
+
+Training data must eventually be stored in cloud-hosted persistent storage so that it can be accessed from multiple devices and locations.
+
 ## MVP Definition
 
 ## MVP Scope
