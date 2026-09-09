@@ -307,7 +307,7 @@ Recent fatigue
 Example:
 
 ```text
-Normal Lower A
+Normal Session A
 
 3 squat sets
 3 RDL sets
@@ -317,7 +317,7 @@ Normal Lower A
 If the athlete has a match the following day:
 
 ```text
-Reduced Lower A
+Reduced Session A
 
 2 squat sets
 2 RDL sets
@@ -403,7 +403,7 @@ Pull-Up
 ### Workout Session
 
 ```text
-Lower A
+Session A
 8 September 2026
 ```
 
@@ -570,7 +570,7 @@ The first frontend version should initially use mock data.
 Example:
 
 ```text
-Lower A
+Session A
 
 Back Squat
 

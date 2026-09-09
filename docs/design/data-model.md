@@ -219,10 +219,10 @@ Represents one of the planned gym sessions.
 The initial programme contains four templates:
 
 ```text
-Lower A
-Upper A
-Lower B
-Upper B
+Session A
+Session B
+Session C
+Session D
 ```
 
 A template defines the intended structure of the session.
@@ -244,10 +244,10 @@ It does not represent a completed workout.
 
 ```text
 id:
-workout_lower_a
+workout_session_a
 
 name:
-Lower A
+Session A
 
 description:
 Lower Strength + Power
@@ -278,7 +278,7 @@ For example:
 Back Squat
 
 Workout:
-Lower A
+Session A
 
 Sets:
 3
@@ -322,10 +322,10 @@ Double progression
 
 ```text
 id:
-planned_lower_a_squat
+planned_session_a_squat
 
 workout_template_id:
-workout_lower_a
+workout_session_a
 
 exercise_id:
 exercise_back_squat
@@ -454,7 +454,7 @@ Represents an actual gym session performed by the athlete.
 Example:
 
 ```text
-Lower A
+Session A
 8 September 2026
 Started 17:03
 Finished 18:01
@@ -544,7 +544,7 @@ Example:
 
 ```text
 Workout:
-Lower A
+Session A
 
 Exercise:
 Back Squat
@@ -667,7 +667,7 @@ true
 ## Workout Template
 
 ```text
-Lower A
+Session A
 ```
 
 ## Planned Exercise
@@ -950,7 +950,7 @@ The application must support workouts where only part of the planned session was
 Example:
 
 ```text
-Lower A
+Session A
 
 Jump        completed
 Squat       completed
@@ -983,7 +983,7 @@ Example:
 8 September 2026
 
 Workout:
-Lower A
+Session A
 
 Status:
 completed
@@ -992,7 +992,7 @@ completed
 The adherence calendar can therefore display the day as:
 
 ```text
-Lower A completed
+Session A completed
 ```
 
 Different workout templates can be represented visually using different fill styles or accent colours.
@@ -1119,7 +1119,7 @@ can have many ExercisePerformance records.
 The athlete opens:
 
 ```text
-Lower A
+Session A
 ```
 
 The system retrieves:
@@ -1367,7 +1367,7 @@ Changing a workout template must not rewrite completed training history.
 
 For example:
 
-If Lower A originally contained:
+If Session A originally contained:
 
 ```text
 Squat

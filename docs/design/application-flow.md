@@ -115,7 +115,7 @@ Example:
 ```text
 NEXT UP
 
-Lower A
+Session A
 Strength + Power
 
 5 exercises
@@ -133,7 +133,7 @@ Example:
 ```text
 Last session
 
-Upper B
+Session D
 Completed Monday
 ```
 
@@ -144,16 +144,16 @@ This helps the athlete understand why the next session has been recommended.
 Display the four available gym sessions as cards.
 
 ```text
-Lower A
+Session A
 Strength + Power
 
-Upper A
+Session B
 Strength
 
-Lower B
+Session C
 Robustness + Power
 
-Upper B
+Session D
 Volume
 ```
 
@@ -200,7 +200,7 @@ Display:
 Example:
 
 ```text
-Lower A
+Session A
 
 Strength + Power
 5 exercises
@@ -264,7 +264,7 @@ Display:
 Example:
 
 ```text
-Lower A
+Session A
 
 Exercise 2 of 5
 
@@ -418,7 +418,7 @@ Example:
 ```text
 Workout Complete
 
-Lower A
+Session A
 
 5 exercises
 13 working sets
@@ -494,10 +494,10 @@ Mon Tue Wed Thu Fri Sat Sun
 Visual state should indicate:
 
 - no gym session
-- Lower A
-- Upper A
-- Lower B
-- Upper B
+- Session A
+- Session B
+- Session C
+- Session D
 
 A future version may also indicate football training and matches.
 
@@ -512,7 +512,7 @@ Example:
 ```text
 Monday 8 September
 
-Lower A
+Session A
 18:24
 
 5 exercises completed

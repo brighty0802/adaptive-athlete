@@ -399,7 +399,7 @@ Approximately 1–2 high-quality working sets of the most important movements, m
 
 Example:
 
-**Lower A — Full**
+**Session A — Full**
 
 - jumps 3 × 3
 - squat 3 × 4–6
@@ -407,7 +407,7 @@ Example:
 - lunges 2 × 6–8
 - calves 2 × 8–12
 
-**Lower A — Maintenance**
+**Session A — Maintenance**
 
 - jumps 2 × 3
 - squat 2 × 4

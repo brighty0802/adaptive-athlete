@@ -192,7 +192,7 @@ The first usable version of Adaptive Athlete must support:
 
 The initial application will recommend sessions using a fixed four-session rotation:
 
-Lower A → Upper A → Lower B → Upper B → repeat.
+Session A → Session B → Session C → Session D → repeat.
 
 A completed workout advances the rotation.
 

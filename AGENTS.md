@@ -73,10 +73,10 @@ If documentation conflicts, report the conflict before implementing behaviour de
 
 The four workout sessions are:
 
-1. `Lower A — Strength + Power`
-2. `Upper A — Strength`
-3. `Lower B — Robustness + Power`
-4. `Upper B — Volume`
+1. `Session A — Strength + Power`
+2. `Session B — Strength`
+3. `Session C — Robustness + Power`
+4. `Session D — Volume`
 
 Use these names consistently in user-facing code and mock data.
 
@@ -87,13 +87,13 @@ Use these names consistently in user-facing code and mock data.
 Until football-aware scheduling is implemented, recommend workouts using:
 
 ```text
-Lower A
+Session A
 ↓
-Upper A
+Session B
 ↓
-Lower B
+Session C
 ↓
-Upper B
+Session D
 ↓
 repeat
 ```
