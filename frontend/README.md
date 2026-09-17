@@ -4,7 +4,7 @@ The real Next.js/React workout UI now uses FastAPI and PostgreSQL for Today,
 workout details, active/resumable sessions, completion feedback, History and
 adherence. Mock data remains only as test fixtures. The home page loads /api/today.
 
-For hosted gym use over 4G, follow the [Vercel + Railway deployment guide](../docs/deployment.md).
+For hosted gym use over 4G, follow the [Vercel + Render deployment guide](../docs/deployment.md).
 
 ## Run
 

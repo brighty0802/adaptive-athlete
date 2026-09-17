@@ -1,17 +1,17 @@
-# Vercel + Railway deployment
+# Vercel + Render Free Web Service deployment
 
 The deployment target is:
 
 ```text
 Phone on 4G -> Vercel (Next.js over HTTPS)
-Browser    -> Railway (FastAPI over HTTPS) -> existing Supabase PostgreSQL
+Browser    -> Render (FastAPI over HTTPS) -> existing Supabase PostgreSQL
 ```
 
 The browser calls FastAPI directly. Vercel serves the frontend; it does not proxy
 the API or connect to PostgreSQL. The laptop is not part of the production path.
 
-**Status:** prepared and tested locally; cloud projects and public URLs still
-need to be created. Nothing has been committed or pushed for this deployment.
+**Status:** the persistent MVP is on GitHub. The switch to Render is prepared
+locally and has not been committed or pushed. Hosted acceptance is still pending.
 
 **Public API limitation:** authentication is deferred. Anyone who discovers the
 API URL can potentially read workout data and invoke write endpoints. CORS limits
@@ -20,20 +20,32 @@ browser origins; it is not authentication and cannot prevent direct API calls.
 ## 1. Publish the reviewed code
 
 The repository remote is `https://github.com/brighty0802/adaptive-athlete.git`,
-branch `main`. The persistent MVP and deployment changes are currently local.
-Review them and explicitly approve a commit and push before proceeding. Do not
+branch `main`. Review the local Render deployment changes and explicitly approve
+a commit and push before publishing those changes. Do not
 commit `.env`, database credentials, virtual environments or build output.
 
-## 2. Create the Railway backend
+## 2. Create the Render backend
 
-1. Sign into Railway and create a service from the GitHub repository above.
-   Connect GitHub/authorize repository access if prompted. Select branch `main`.
-2. Set the service **Root Directory** to `/backend` and use **Railpack**.
-   `backend/.python-version` selects Python 3.12; `requirements.txt` supplies
-   runtime dependencies. `backend/railpack.json` sets the start command to
-   `python -m app.serve`, which binds `0.0.0.0` to Railway's supplied `PORT`
-   without development reload.
-3. Add these variables in Railway's private variables editor:
+1. Sign into Render and select **New > Web Service**. Connect the GitHub
+   repository above and authorize access if prompted. Select branch `main`.
+2. Enter these dashboard settings. Select the **Free** instance type; do not
+   create a Render database because persistence stays in existing Supabase.
+
+   | Setting | Value |
+   | --- | --- |
+   | Root Directory | `backend` |
+   | Runtime / Language | `Python 3` |
+   | Build Command | `pip install -r requirements.txt` |
+   | Start Command | `python -m app.migrate && python -m app.serve` |
+   | Health Check Path | `/health` |
+   | Instance Type | `Free` |
+
+   `backend/.python-version` retains Python 3.12 (latest matching patch).
+   Commands run from the service root, so do not add another `cd backend`.
+   `app.serve` binds `0.0.0.0` to Render's supplied `PORT` without reload;
+   the local fallback remains port 8000. Leave `PORT` and `PYTHON_VERSION`
+   unset in the dashboard to use platform/file configuration.
+3. Add these variables in Render's private **Environment** editor:
 
    | Variable | Value |
    | --- | --- |
@@ -41,34 +53,52 @@ commit `.env`, database credentials, virtual environments or build output.
    | `APP_ENV` | `production` |
    | `CORS_ORIGINS` | The exact Vercel HTTPS origin, without a trailing slash. Before that domain exists, use `https://example.invalid` temporarily, then replace it in step 4. |
 
-   Railway supplies `PORT`; do not hard-code it. The temporary CORS origin is
+   Render supplies `PORT`; do not hard-code it. The temporary CORS origin is
    deliberately unusable and prevents browser access until the real frontend
    origin is configured. It is not a generated production URL.
-4. In service deployment settings, set **Pre-deploy Command** to
-   `python -m app.migrate`. Set **Healthcheck Path** to `/health` and the
-   healthcheck timeout to 60 seconds. Use one replica and restart on failure.
-   Keep the service running during gym use.
-5. Deploy. The migration command checks the existing migration tracking table
-   and applies only pending migrations in a transaction. The current database
-   already has the migrations; it is not reset or recreated. If migration fails,
-   fix the cause before deploying rather than bypassing the command.
-6. Generate a public domain in Railway's networking settings. Copy its actual
-   HTTPS URL. Confirm `<actual Railway URL>/health` returns `{"status":"ok"}`.
-   Also open `<actual Railway URL>/api/today` to verify database access: health
+4. Leave **Pre-deploy Command** empty: it is unavailable on Free web services.
+   The start command instead runs the existing migration check before the server.
+   Its `&&` prevents startup if migration fails. This check also runs on restarts
+   and wake-ups. Applied files are checksum-checked and skipped; only pending
+   migrations run, inside a transaction with an advisory lock. The existing
+   schema is not reset or recreated. Do not run migrations in the build command
+   or on requests. Future migrations must remain safe alongside the old version
+   during a deploy; do not bypass a failed migration to bring the server up.
+5. Select **Deploy Web Service**. Wait for the service to become live and copy
+   the actual public `https://...onrender.com` URL shown on its service page.
+   Render assigns the public URL; no separate domain generation is needed.
+   Confirm `<actual Render URL>/health` returns `{"status":"ok"}`.
+   Also open `<actual Render URL>/api/today` to verify database access: health
    alone does not prove PostgreSQL connectivity. Do not post returned workout
    data or credentials publicly.
 
-The native Railpack configuration is intentional: new Railway services no
-longer support the deprecated `railway.toml`/`railway.json` configuration flow.
-Pre-deploy and healthcheck settings above are configured in the dashboard.
-See [Railway configuration guidance](https://docs.railway.com/config-as-code),
-[Railpack Python detection](https://railpack.com/languages/python),
-[Railpack start-command guidance](https://railpack.com/config/procfile) and
-[Railway pre-deploy commands](https://docs.railway.com/deployments/pre-deploy-command).
+Dashboard configuration is sufficient for this single native Python service;
+no Dockerfile or `render.yaml` is needed. The obsolete `backend/railpack.json`
+has been removed. See [Render FastAPI deployment](https://render.com/docs/deploy-fastapi),
+[monorepo roots](https://render.com/docs/monorepo-support),
+[Python version selection](https://render.com/docs/python-version),
+[health checks](https://render.com/docs/health-checks) and
+[pre-deploy availability](https://render.com/docs/deploys#pre-deploy-command).
+
+### Free service behaviour during a gym session
+
+Render Free sleeps after 15 minutes without inbound traffic and takes about a
+minute to wake. The app's existing 12-second API timeout can therefore show a
+connection error during wake-up. Before training, open the Render `/health` URL
+and wait for the JSON response, then open/reload Today. If it sleeps during a
+long break, wait for it to wake and use **Retry Save** for pending entries; keep
+the page open until **Saved** appears. Do not clear browser drafts.
+
+Saved records stay in Supabase across sleeps/restarts. Render's local filesystem
+is ephemeral. Free services have shared monthly instance-hour, bandwidth and
+build limits and may be suspended when allowances are exhausted; heavy outbound
+traffic to an external database can also trigger suspension. This is a personal
+MVP hosting choice, not an always-on guarantee. No keep-alive workaround is
+configured. See [Render Free limits](https://render.com/docs/free).
 
 ## 3. Create the Vercel frontend
 
-1. Sign into Vercel, import the same GitHub repository and select `main` as the
+1. Open your existing Vercel project, or import the same GitHub repository and select `main` as the
    production branch. Set **Root Directory** to `frontend`.
 2. Use the **Next.js** preset, install command `npm ci`, build command
    `npm run build` and the preset's default output directory. Use Node.js 24.x.
@@ -77,7 +107,7 @@ See [Railway configuration guidance](https://docs.railway.com/config-as-code),
 
    | Variable | Value |
    | --- | --- |
-   | `NEXT_PUBLIC_API_BASE_URL` | The actual Railway HTTPS origin from step 2, without `/api` or `/health`. |
+   | `NEXT_PUBLIC_API_BASE_URL` | The actual Render HTTPS origin from step 2, without `/api` or `/health`. |
 
    This address is public by design. Never add `DATABASE_URL`, the database
    password or Supabase service credentials to the frontend environment.
@@ -92,7 +122,7 @@ roots; see [Next.js on Vercel](https://vercel.com/docs/frameworks/full-stack/nex
 
 ## 4. Connect the production browser origin
 
-1. Replace Railway's temporary `CORS_ORIGINS` with the exact Vercel production
+1. Replace Render's temporary `CORS_ORIGINS` with the exact Vercel production
    origin, for example the actual `https://...vercel.app` origin shown in your
    project. No trailing slash or path. Apply the variables/redeploy the backend.
 2. Open the Vercel production URL and confirm Today loads a real workout.

@@ -1,4 +1,4 @@
-"""Railway entry point: reads its assigned PORT without shell interpolation."""
+"""Hosted entry point: reads the platform's PORT without shell interpolation."""
 import os
 
 import uvicorn

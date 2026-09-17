@@ -5,12 +5,13 @@ from app.main import create_app
 from app import serve
 
 
-def test_start_uses_railway_port_without_reload(monkeypatch):
-    monkeypatch.setenv("PORT", "9123")
+@pytest.mark.parametrize("port", [10000, 9123])
+def test_start_uses_render_supplied_port_without_reload(monkeypatch, port):
+    monkeypatch.setenv("PORT", str(port))
     calls = []
     monkeypatch.setattr(serve.uvicorn, "run", lambda *args, **kwargs: calls.append((args, kwargs)))
     serve.main()
-    assert calls == [(("app.main:app",), {"host": "0.0.0.0", "port": 9123, "reload": False})]
+    assert calls == [(("app.main:app",), {"host": "0.0.0.0", "port": port, "reload": False})]
 
 
 @pytest.mark.parametrize("value", ["", "zero", "0", "-1", "65536"])

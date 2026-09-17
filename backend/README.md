@@ -3,7 +3,7 @@
 The real workout interface now uses FastAPI and PostgreSQL. The original v2
 `/persistence-test`, set endpoints and `/health` remain available.
 
-For hosted gym use over 4G, follow the [Vercel + Railway deployment guide](../docs/deployment.md).
+For hosted gym use over 4G, follow the [Vercel + Render deployment guide](../docs/deployment.md).
 
 ## Run (PowerShell)
 
