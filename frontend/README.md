@@ -1,6 +1,6 @@
 # Adaptive Athlete frontend
 
-The core frontend workout flow: Today → Workout Detail → Active Workout → Workout Complete. Uses Next.js App Router, React, TypeScript and plain CSS, with typed mock data and in-memory React state.
+The core frontend workout flow: Today → Workout Detail → Active Workout → Workout Complete. Uses Next.js App Router, React, TypeScript and plain CSS, with typed mock data and in-memory React state. A separate health check proves communication with the FastAPI backend.
 
 ## Run locally
 
@@ -38,6 +38,29 @@ return to Today and resume, then finish partially. On the laptop, check DevTools
 Network for successful `/_next/` JavaScript requests and Console for hydration errors.
 Each tab has its own in-memory workout; entries do not synchronise between devices.
 
+## Backend connection check
+
+Run FastAPI in a second terminal using the instructions in [backend/README.md](../backend/README.md).
+The small indicator near the bottom of the page requests `GET /health` and displays
+**Backend connected**, or an unavailable message with **Check again**. It checks on
+mount and on demand, with a five-second timeout; it is not continuous monitoring.
+Workout state remains entirely in React and works even when FastAPI is stopped.
+
+By default the request uses the browser's scheme and hostname with port `8000`:
+`localhost:3000` calls `localhost:8000`, and `192.168.1.106:3000` calls
+`192.168.1.106:8000`. This matters because localhost on a phone refers to the phone.
+The request starts in `useEffect` after hydration, not while Next.js renders HTML.
+
+For a different backend address, set `NEXT_PUBLIC_API_BASE_URL` in `.env.local`
+(see `.env.example`). Restart the dev server after changing it; production builds
+embed this public value at build time. Never place secrets in public variables.
+The backend must also permit the frontend's exact origin via `CORS_ORIGINS`.
+
+In browser DevTools, verify `/health` returns HTTP 200 and `{"status":"ok"}`.
+Stop FastAPI and press **Check again** to verify the failure state; restart and
+retry to recover. Repeat on a phone using the laptop's LAN IP and both servers
+bound to `0.0.0.0`.
+
 ## Checks
 
 ```sh
@@ -70,10 +93,13 @@ npm start
 - `src/types/workout.ts`: display-data contracts, separate from the future persistence schema.
 - `src/lib/workout-session.ts`: immutable logging transitions, validation, counts and completion status. Contains no training progression decisions.
 - `src/lib/dates.ts`: calendar-date parsing and formatting.
+- `src/components/backend-status.tsx`: isolated connection status, timeout, cancellation and retry.
+- `src/lib/backend-health.ts`: hostname-aware health URL and validated JSON request.
+- `tests/backend-health.test.mjs`: URL selection and success/failure request tests.
 - `src/app/globals.css`: responsive layout and visual styles.
 - `tests/workout-session.test.mjs`: Node test-runner checks for actual logging behaviour and server rendering. Uses the existing TypeScript compiler without additional dependencies.
 
-App Router components are Server Components by default. `WorkoutFlow` uses `"use client"` because navigation and logging need browser state. Its child screens receive values and callbacks as props. The server page passes plain serializable fixtures into that client boundary. The page's server rendering is a Next.js rendering feature; there is no application backend or API integration here.
+App Router components are Server Components by default. `WorkoutFlow` uses `"use client"` because navigation and logging need browser state. Its child screens receive values and callbacks as props. The server page passes plain serializable fixtures into that client boundary. The separate `BackendStatus` Client Component makes the only application API call; it does not control the workout flow.
 
 The four screens currently share the `/` route. Navigation uses React state, with focus and scroll reset on screen changes. These are not separate bookmarkable URLs; browser Back does not step through them. Use the in-app navigation for this prototype.
 
@@ -91,6 +117,6 @@ Dates use Europe/London for this initial personal prototype. Sample history is r
 - The complete screen shows recorded work and sample progression feedback for fully completed exercises. Feedback is explicitly illustrative, is not calculated from inputs, and never changes proposed loads.
 - History, Progress and More remain placeholders. Reloading or closing the tab clears new entries. No localStorage, sessionStorage, cookies, IndexedDB or remote persistence is used.
 
-No database, authentication, progression engine, API calls or PWA installation features are included. Framework runtime dependencies are Next.js, React and React DOM; development dependencies provide TypeScript and ESLint checks. Generated output, local environment files and installed packages are ignored by Git.
+No database, authentication, progression engine, workout API calls or PWA installation features are included. Framework runtime dependencies are Next.js, React and React DOM; development dependencies provide TypeScript and ESLint checks. Generated output, local environment files and installed packages are ignored by Git.
 
 ESLint is pinned to 9.39.5 because the React/import/accessibility plugins bundled by `eslint-config-next` 16.3.4 do not support ESLint 10 yet. npm reports the ESLint 9 deprecation; upgrade the lint stack together when those plugins support ESLint 10. Do not update ESLint alone.

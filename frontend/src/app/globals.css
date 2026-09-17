@@ -158,6 +158,10 @@ progress::-webkit-progress-value { border-radius: 8px; background: var(--accent)
 progress::-moz-progress-bar { border-radius: 8px; background: var(--accent); }
 .action-notice { color: #b3dfc3; font-size: 12px; line-height: 1.6; }
 .action-notice:empty { display: none; }
+.backend-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 20px 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.backend-status p { flex: 1 1 180px; }
+.backend-status button { min-height: 44px; }
+.backend-status button:disabled { opacity: 0.5; cursor: wait; }
 .active-exercise { min-width: 0; }
 .active-exercise summary { cursor: pointer; padding: 20px; min-height: 78px; display: flex; align-items: center; justify-content: space-between; gap: 12px; list-style: none; }
 .active-exercise summary::-webkit-details-marker { display: none; }

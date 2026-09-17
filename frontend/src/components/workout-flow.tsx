@@ -9,6 +9,7 @@ import { ActiveWorkout } from "./active-workout";
 import { WorkoutComplete } from "./workout-complete";
 import { BottomNavigation } from "./bottom-navigation";
 import { Icon } from "./icon";
+import { BackendStatus } from "./backend-status";
 
 export function WorkoutFlow({ initialData, workouts }: { initialData: TodayData; workouts: readonly WorkoutDefinition[] }) {
   const [today, setToday] = useState(initialData);
@@ -91,6 +92,7 @@ export function WorkoutFlow({ initialData, workouts }: { initialData: TodayData;
           <WorkoutComplete workout={currentWorkout} session={session} onToday={openToday} />
         )}
       </main>
+      <BackendStatus />
       <BottomNavigation onToday={openToday} isToday={screen.kind === "today"} />
     </div>
   );
