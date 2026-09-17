@@ -34,7 +34,7 @@ const { WorkoutDetail } = load(path.join(root, "components/workout-detail"));
 const { ActiveWorkout } = load(path.join(root, "components/active-workout"));
 const { WorkoutComplete } = load(path.join(root, "components/workout-complete"));
 const { getMockTodayData } = load(path.join(root, "data/mock-today"));
-const { WorkoutFlow } = load(path.join(root, "components/workout-flow"));
+const { TodayScreen } = load(path.join(root, "components/today-screen"));
 const noop = () => {};
 const workout = workouts[0];
 
@@ -122,7 +122,7 @@ test("timed holds log seconds without weight or RIR; screen uses correct inputs"
   assert.equal(log.sets[0].weight, "");
   assert.equal(log.sets[0].rir, "");
   const html = renderToStaticMarkup(React.createElement(ActiveWorkout, {
-    workout: item, session, onAction: noop, onFinish: noop, onBack: noop,
+    workout: item, session, savedExercises: session.exercises, canFinish: true, locked: false, onAction: noop, onFinish: noop, onBack: noop,
   }));
   assert.ok(html.includes("Seconds / side"));
   assert.ok(!html.includes('id="copenhagen-set-0-rir"'));
@@ -140,18 +140,51 @@ test("finish distinguishes empty, partial and full; terminal session cannot be c
   assert.deepEqual(finishSession(partial, 90000), partial);
   for (const exercise of workout.exercises) session = updateSession(session, workout, { type: "prescribed", exerciseId: exercise.id });
   assert.equal(finishSession(session, 61000).status, "completed");
-  const html = renderToStaticMarkup(React.createElement(WorkoutComplete, { workout, session: partial, onToday: noop }));
+  const html = renderToStaticMarkup(React.createElement(WorkoutComplete, { workout, session: { ...partial, feedback: { "standing-calf": "Repeat the established load." } }, onToday: noop }));
   assert.ok(html.includes("Partial workout complete"));
-  assert.ok(html.includes("MOCK FEEDBACK"));
-  assert.ok(html.includes("not calculated from your entries"));
+  assert.ok(html.includes("NEXT EXPOSURE"));
+  assert.ok(html.includes("Repeat the established load."));
+  assert.ok(!html.includes("MOCK FEEDBACK"));
   assert.ok(html.includes("Set 1:"));
 });
 
-test("Today still renders four details buttons and a mocked recommendation", () => {
-  const html = renderToStaticMarkup(React.createElement(WorkoutFlow, {
-    initialData: getMockTodayData(new Date("2026-09-09T12:00:00Z")), workouts,
+test("Today renders all four supplied workouts and the supplied recommendation", () => {
+  const html = renderToStaticMarkup(React.createElement(TodayScreen, {
+    data: getMockTodayData(new Date("2026-09-09T12:00:00Z")), onOpenWorkout: noop,
   }));
   assert.equal((html.match(/class="workout-card /g) || []).length, 4);
   for (const item of workouts) assert.ok(html.includes(`View ${item.name}`));
   assert.ok(html.includes("View Workout"));
+});
+
+test("reordering and technique confirmation preserve logged values", () => {
+  let session = createSession(workout, 1000);
+  const exerciseId = session.exercises[1].exerciseId;
+  session = updateSession(session, workout, { type: "prescribed", exerciseId });
+  session = updateSession(session, workout, { type: "move", exerciseId, direction: -1 });
+  session = updateSession(session, workout, { type: "technique", exerciseId, confirmed: true });
+  assert.equal(session.exercises[0].exerciseId, exerciseId);
+  assert.equal(session.exercises[0].techniqueConfirmed, true);
+  assert.equal(session.exercises[0].sets[0].weight, "75");
+  assert.equal(sessionCounts(session).completedSets, 3);
+});
+
+test("unknown initial weight cannot quick-complete and pending completion is explicit", () => {
+  const fresh = structuredClone(workout);
+  fresh.exercises[1].proposedLoadKg = null;
+  const original = createSession(fresh, 1000);
+  assert.equal(sessionCounts(updateSession(original, fresh, { type: "prescribed", exerciseId: "back-squat" })).completedSets, 0);
+  const pending = updateSession(createSession(workout, 1000), workout, { type: "prescribed", exerciseId: "back-squat" });
+  const html = renderToStaticMarkup(React.createElement(ActiveWorkout, {
+    workout, session: pending, savedExercises: original.exercises, canFinish: false, onAction: noop, onFinish: noop, onBack: noop,
+  }));
+  assert.ok(html.includes("Completion pending save"));
+  assert.ok(html.includes("disabled=\"\">Finish Workout"));
+});
+
+test("Today has an honest empty history and zero adherence", () => {
+  const data = { ...getMockTodayData(new Date("2026-09-09T12:00:00Z")), lastCompletedWorkout: null, completedWorkouts: [] };
+  const html = renderToStaticMarkup(React.createElement(TodayScreen, { data, onOpenWorkout: noop }));
+  assert.ok(html.includes("0 sessions"));
+  assert.ok(!html.includes("calendar-day trained"));
 });

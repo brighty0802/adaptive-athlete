@@ -14,7 +14,7 @@ export function BackendStatus() {
 
     async function check() {
       try {
-        const url = getHealthUrl(window.location.origin, process.env.NEXT_PUBLIC_API_BASE_URL);
+        const url = getHealthUrl(window.location.origin);
         await fetchBackendHealth(url, controller.signal);
         if (!cancelled) setStatus("connected");
       } catch {
@@ -36,7 +36,7 @@ export function BackendStatus() {
       <p role="status">
         {status === "checking" && "Checking backend connection…"}
         {status === "connected" && "Backend connected"}
-        {status === "unavailable" && "Backend unavailable — mock workouts still work."}
+        {status === "unavailable" && "Backend unavailable — keep pending entries open and retry when connected."}
       </p>
       <button type="button" className="text-button" disabled={status === "checking"} onClick={() => {
         setStatus("checking");

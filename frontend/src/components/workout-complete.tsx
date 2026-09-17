@@ -2,8 +2,8 @@ import type { WorkoutDefinition, WorkoutSession } from "@/types/workout";
 import { exerciseStatus, sessionCounts } from "@/lib/workout-session";
 import { Icon } from "./icon";
 
-export function WorkoutComplete({ workout, session, onToday }: {
-  workout: WorkoutDefinition; session: WorkoutSession; onToday: () => void;
+export function WorkoutComplete({ workout, session, onToday, backLabel = "Back to Today" }: {
+  workout: WorkoutDefinition; session: WorkoutSession & { feedback?: Record<string, string> }; onToday: () => void; backLabel?: string;
 }) {
   const counts = sessionCounts(session);
   const minutes = Math.max(0, Math.round(((session.finishedAt ?? session.startedAt) - session.startedAt) / 60000));
@@ -13,7 +13,7 @@ export function WorkoutComplete({ workout, session, onToday }: {
         <span className="completion-icon"><Icon name="check" /></span>
         <p className="eyebrow">{workout.name} · {workout.focus}</p>
         <h1>{session.status === "cancelled" ? "Workout ended" : session.status === "partial" ? "Partial workout complete" : "Workout complete!"}</h1>
-        <p>{session.status === "cancelled" ? "No completed sets. Your rotation hasn’t changed." : "Your completed work is recorded for this preview."}</p>
+        <p>{session.status === "cancelled" ? "No completed sets. Your rotation hasn’t changed." : "Your completed work is saved in your training history."}</p>
       </div>
       <dl className="completion-stats panel">
         <div><dt>Exercises completed</dt><dd>{counts.completedExercises}<small> / {counts.totalExercises}</small></dd></div>
@@ -42,17 +42,17 @@ export function WorkoutComplete({ workout, session, onToday }: {
         </ul>
       </section>
       <section className="panel mock-feedback" aria-labelledby="feedback-heading">
-        <p className="eyebrow">MOCK FEEDBACK · EXAMPLE ONLY</p>
+        <p className="eyebrow">NEXT EXPOSURE</p>
         <h2 id="feedback-heading">Looking ahead</h2>
-        <p>These examples are not calculated from your entries. Proposed loads have not changed.</p>
+        <p>Recommendations use your recorded sets, RIR and technique confirmation.</p>
         {workout.exercises.filter((exercise) => {
           const log = session.exercises.find((item) => item.exerciseId === exercise.id)!;
           return exerciseStatus(log) === "completed";
-        }).map((exercise) => <div key={exercise.id}><h3>{exercise.name}</h3><p>{exercise.mockFeedback}</p></div>)}
+        }).map((exercise) => <div key={exercise.id}><h3>{exercise.name}</h3><p>{session.feedback?.[exercise.id] ?? "No progression assessment available."}</p></div>)}
         {counts.completedExercises === 0 && <p>No fully completed exercises. Partial work is shown above; skipped work is not a performance failure.</p>}
       </section>
-      <p className="preview-info">Nothing is saved permanently. Refreshing clears this preview.</p>
-      <button type="button" className="start-button" onClick={onToday}>Back to Today<Icon name="arrow" /></button>
+      <p className="preview-info">Saved workouts remain available after refreshing or restarting the backend.</p>
+      <button type="button" className="start-button" onClick={onToday}>{backLabel}<Icon name="arrow" /></button>
     </div>
   );
 }

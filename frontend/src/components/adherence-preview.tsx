@@ -12,7 +12,7 @@ export function AdherencePreview({ today, sessions, workouts }: { today: string;
   return (
     <section className="adherence panel" aria-labelledby="adherence-heading">
       <div className="section-heading"><div><p className="eyebrow">SHOWING UP ADDS UP</p><h2 id="adherence-heading">This month</h2></div><span className="session-count">{monthSessions.length} sessions</span></div>
-      <p className="calendar-month">{formatCalendarDate(today, { month: "long", year: "numeric" })} <span>· Preview activity</span></p>
+      <p className="calendar-month">{formatCalendarDate(today, { month: "long", year: "numeric" })}</p>
       <div className="calendar" role="list" aria-label="Monthly training activity">
         {["M", "T", "W", "T", "F", "S", "S"].map((day, index) => <span className="weekday" key={`weekday-${index}`} aria-hidden="true">{day}</span>)}
         {Array.from({ length: offset }, (_, index) => <span key={`empty-${index}`} aria-hidden="true" />)}

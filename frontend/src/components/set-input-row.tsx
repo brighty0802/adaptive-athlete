@@ -2,13 +2,14 @@ import { useState } from "react";
 import type { ExercisePrescription, SetEntry } from "@/types/workout";
 import { validateSet } from "@/lib/workout-session";
 
-export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen }: {
+export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen, pending = false }: {
   exercise: ExercisePrescription;
   set: SetEntry;
   index: number;
   onEdit: (field: "weight" | "amount" | "rir", value: string) => void;
   onComplete: () => void;
   onReopen: () => void;
+  pending?: boolean;
 }) {
   const [showErrors, setShowErrors] = useState(false);
   const error = showErrors ? validateSet(set, exercise) : null;
@@ -24,8 +25,8 @@ export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen
   }
 
   return (
-    <fieldset className={`set-row ${set.completed ? "set-done" : ""}`}>
-      <legend>Set {index + 1}{set.completed ? " · Completed ✓" : ""}</legend>
+    <fieldset className={`set-row ${set.completed && !pending ? "set-done" : ""}`}>
+      <legend>Set {index + 1}{set.completed ? pending ? " · Completion pending save" : " · Completed ✓" : pending ? " · Unsaved changes" : ""}</legend>
       <div className="set-fields">
         {exercise.loadKind !== "none" && (
           <label htmlFor={`${prefix}-weight`}>

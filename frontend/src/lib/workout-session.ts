@@ -6,13 +6,15 @@ export type SessionAction =
   | { type: "reopen-set"; exerciseId: string; setIndex: number }
   | { type: "skip"; exerciseId: string }
   | { type: "resume"; exerciseId: string }
+  | { type: "technique"; exerciseId: string; confirmed: boolean }
+  | { type: "move"; exerciseId: string; direction: -1 | 1 }
   | { type: "prescribed"; exerciseId: string };
 
 export function createSession(workout: WorkoutDefinition, startedAt: number): WorkoutSession {
   return {
     workoutId: workout.id, startedAt, finishedAt: null, status: "in_progress",
     exercises: workout.exercises.map((exercise) => ({
-      exerciseId: exercise.id, skipped: false,
+      exerciseId: exercise.id, skipped: false, techniqueConfirmed: false,
       sets: Array.from({ length: exercise.sets }, () => ({
         weight: exercise.proposedLoadKg === null ? "" : String(exercise.proposedLoadKg),
         amount: "", rir: "", touched: false, completed: false,
@@ -28,10 +30,12 @@ function validNumber(value: string, minimum: number, maximum: number, integer = 
 
 export function validateSet(set: SetEntry, exercise: ExercisePrescription): string | null {
   if (exercise.loadKind !== "none" && !validNumber(set.weight, 0, 2000)) return "Enter a weight from 0 to 2,000 kg.";
+  if (exercise.loadKind !== "none" && Math.abs(Number(set.weight) * 100 - Math.round(Number(set.weight) * 100)) > 0.000001) return "Use at most two decimal places for weight.";
   if (!validNumber(set.amount, 0, exercise.measurement === "seconds" ? 3600 : 1000, true)) {
     return exercise.measurement === "seconds" ? "Enter whole seconds from 0 to 3,600." : "Enter whole repetitions from 0 to 1,000.";
   }
   if (exercise.targetRir !== null && !validNumber(set.rir, 0, 10)) return "Enter RIR from 0 to 10.";
+  if (exercise.targetRir !== null && Math.abs(Number(set.rir) * 10 - Math.round(Number(set.rir) * 10)) > 0.000001) return "Use at most one decimal place for RIR.";
   return null;
 }
 
@@ -57,16 +61,26 @@ export function updateSession(session: WorkoutSession, workout: WorkoutDefinitio
   if (session.status !== "in_progress") return session;
   const prescription = workout.exercises.find((exercise) => exercise.id === action.exerciseId);
   if (!prescription) return session;
+  if (action.type === "move") {
+    const index = session.exercises.findIndex((log) => log.exerciseId === action.exerciseId);
+    const target = index + action.direction;
+    if (target < 0 || target >= session.exercises.length) return session;
+    const exercises = [...session.exercises];
+    [exercises[index], exercises[target]] = [exercises[target], exercises[index]];
+    return { ...session, exercises };
+  }
   return {
     ...session,
     exercises: session.exercises.map((log) => {
       if (log.exerciseId !== action.exerciseId) return log;
+      if (action.type === "technique") return { ...log, techniqueConfirmed: action.confirmed };
       if (action.type === "skip") {
         return log.sets.every((set) => set.completed) ? log : { ...log, skipped: true };
       }
       if (action.type === "resume") return { ...log, skipped: false };
       if (log.skipped) return log;
       if (action.type === "prescribed") {
+        if (prescription.loadKind !== "none" && prescription.proposedLoadKg === null) return log;
         return {
           ...log,
           sets: log.sets.map((set) => set.completed || set.touched ? set : {

@@ -1,41 +1,21 @@
-# Adaptive Athlete backend — v1
+﻿# Adaptive Athlete backend - persistent gym MVP
 
-Small FastAPI foundation. `GET /health` returns HTTP 200 and `{"status":"ok"}`.
-This confirms the API process responds; it does not check a database or save workouts.
+The real workout interface now uses FastAPI and PostgreSQL. The original v2
+`/persistence-test`, set endpoints and `/health` remain available.
 
-## Setup (Windows PowerShell)
+For hosted gym use over 4G, follow the [Vercel + Railway deployment guide](../docs/deployment.md).
 
-Requires Python 3.12 or newer (verified with 3.12.10). In a terminal:
+## Run (PowerShell)
+
+Keep the database URI in ignored `backend/.env`; never place it in frontend config.
+The existing Supabase Session pooler connection remains unchanged.
 
 ```powershell
 cd 'C:\Users\lewis\Documents\Adaptive Athlete\adaptive-athlete\backend'
-py -3.12 -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-```
-
-The virtual environment keeps these dependencies separate from global Python.
-Calling its Python directly avoids PowerShell activation/execution-policy issues.
-Setup is needed once; rerun the install when requirements change.
-
-## Run
-
-From `backend/`, for laptop-only development:
-
-```powershell
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-For laptop **and phone** on the same Wi-Fi:
-
-```powershell
+.\.venv\Scripts\python.exe -m app.migrate
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
-
-`app.main:app` means the `app` object inside `app/main.py`. Uvicorn runs the HTTP
-server; `--reload` restarts it after Python changes. Stop with Ctrl+C.
-Use `http://localhost:8000/health` on the laptop or
-`http://192.168.1.106:8000/health` on the phone. `0.0.0.0` is a listening address,
-not a browser URL. Interactive API documentation is at `/docs`.
 
 In a second terminal:
 
@@ -44,92 +24,202 @@ cd 'C:\Users\lewis\Documents\Adaptive Athlete\adaptive-athlete\frontend'
 npm.cmd run dev -- --hostname 0.0.0.0
 ```
 
-Open `http://localhost:3000` on the laptop or `http://192.168.1.106:3000` on either
-device. Near the bottom of the page, the connection indicator should become
-**Backend connected**. The browser calls FastAPI directly on port 8000; the Next.js
-server does not proxy the request. See DevTools Network for `/health` and its JSON.
-Stop FastAPI, press **Check again**, and confirm the unavailable message appears
-within five seconds while mock workouts still work. Restart FastAPI and retry.
+Open http://localhost:3000 or, on the same LAN, http://192.168.1.106:3000.
+For this local setup, the laptop must remain running and reachable from the
+phone. The deployment guide above removes that requirement for hosted use.
 
-If the phone cannot load `/health` directly, check both devices are on the same
-Wi-Fi and that Windows Firewall permits Python on your private network. Do not
-disable the firewall or expose these development servers to the public internet.
+For a new Python environment: `py -3.12 -m venv .venv` before installing. Calling
+the venv Python directly avoids PowerShell activation-policy issues. Stop servers
+with Ctrl+C. Existing servers using `--reload` pick up backend code changes.
 
-## Development CORS configuration
+## Architecture and database
 
-An origin includes scheme, host **and port**. `app/main.py` defaults to these exact
-frontend origins:
+Browser -> FastAPI validates/commits -> PostgreSQL -> FastAPI -> browser.
+React holds editing state. PostgreSQL holds saved progress. A browser draft keeps
+pending edits recoverable after a failed request or refresh; it is not a second
+training-history database. Saves are debounced and serialized. Revision numbers
+reject stale writes; stable mutation UUIDs make ambiguous retries safe.
 
-- `http://localhost:3000`
-- `http://127.0.0.1:3000`
-- `http://192.168.1.106:3000`
+All tables live in `app_private`, with PUBLIC access revoked and RLS enabled.
+The backend uses the existing table-owner connection. No browser policies or
+Supabase SDK/service-role key are introduced.
 
-Only GET is allowed by the CORS policy; cross-origin credentials are disabled.
-Unlisted origins do not receive permission to read responses in a browser.
-CORS is a browser rule, not authentication or a firewall.
+| Table | Purpose |
+| --- | --- |
+| schema_migrations | Applied SQL filenames/checksums |
+| set_performances | Preserved v2 standalone sets, unchanged |
+| workout_sessions | UUID, template ID, prescription snapshot, status, start/finish times, revision, last mutation, feedback |
+| exercise_performances | UUID, session FK, exercise slug, actual order, skipped flag, technique confirmation |
+| workout_sets | UUID, exercise-performance FK, set number, completed flag, actual weight/reps/seconds/RIR, unfinished input draft |
 
-To replace the allowlist, set this in the backend terminal **before** starting
-Uvicorn (no `.env` loader or configuration package is needed):
+Relationships: session -> many exercise performances -> many sets. Canonical
+exercises and planned templates live in `app/programme.py`, a stable backend
+configuration. Every started session snapshots its planned prescription, separately
+from actual numeric results, so programme edits cannot rewrite past workouts.
+
+Completed weights use numeric(6,2), RIR numeric(3,1), reps/seconds smallint; range
+constraints match API validation. Draft inputs do not become zero-rep results.
+A unique partial index permits only one in-progress workout. Set positions and
+exercise order are unique within their parent. Changes commit atomically.
+
+A schema defines database structure (and `app_private` is a PostgreSQL namespace).
+A migration is a numbered change to that structure. `002_workout_sessions.sql`
+adds tables without deleting v2 data. Never edit an applied migration: add another
+numbered file. The migration runner is explicit, atomic and safe to rerun.
+
+## API
+
+| Method / route | Result |
+| --- | --- |
+| GET /health | Process health; independent of database |
+| GET /api/workouts | Four backend prescriptions, previous results and next loads |
+| GET /api/today | Recommendation, real adherence/history summaries and active session |
+| POST /api/sessions | Start one session; client UUID makes retries idempotent |
+| GET /api/sessions | Finished sessions with snapshots and actual work |
+| GET /api/sessions/{id} | Retrieve/resume one session |
+| PUT /api/sessions/{id} | Save the ordered exercise/set draft atomically with revision/mutation UUID |
+| POST /api/sessions/{id}/finish | Finish as completed, partial or empty/cancelled |
+| POST /api/set-performances | Original v2 standalone set creation |
+| GET /api/set-performances/latest?exercise=back-squat | Original latest-set retrieval |
+
+Creation returns 201; reads/updates 200. Missing resources 404, invalid input 422,
+conflicting active/stale session 409, database/configuration errors a sanitized 503.
+FastAPI `/docs` describes the typed request/response models.
+
+## Rotation, previous results and progression
+
+Session A (Lower A) -> B (Upper A) -> C (Lower B) -> D (Upper B) -> repeat.
+The next recommendation follows the latest deliberately completed/partial session,
+including manual selection. Opening/starting/logging alone never advances it.
+Finishing twice has no extra effect. An empty cancelled session does not count.
+History/adherence use the workout start date in Europe/London, including DST.
+
+Previous performance prefers the latest fully completed, non-skipped exercise,
+including one inside a partial workout. If there is no full performance, available
+partial work establishes a baseline; v2 standalone sets are a final fallback.
+Partial/skipped work does not automatically reduce the established prescription.
+
+The pure replaceable engine in `app/progression.py` increases load only when all
+planned sets are completed at one consistent weight, every set reaches the upper
+rep target and minimum RIR, and controlled technique is explicitly confirmed.
+Otherwise it maintains the established load. First-use weights are blank rather
+than made-up examples; added-weight bodyweight exercises start at zero.
+
+Configurable increments in `app/programme.py`: squat/RDL/bench +2.5 kg, shoulder
+press +1 kg, lunges +1 kg per hand, pull-ups/chin-ups/dips +2.5 kg added. For unknown
+machine/dumbbell steps the feedback asks for the smallest available increment and
+keeps the displayed load until the athlete chooses it. Power/quality/timed exercises
+never use automatic weight progression. Equipment increments are assumptions, not
+claims about what your gym has; edit the backend profile if needed.
+
+## Configuration and LAN
+
+- Backend `DATABASE_URL`: secret PostgreSQL URI, loaded from backend/.env; existing
+  shell variables take precedence. Supabase Session pooler uses port 5432 and
+  `sslmode=require`. Password special characters must be percent-encoded.
+- Backend `CORS_ORIGINS`: optional comma-separated exact browser origins. Defaults
+  include localhost, 127.0.0.1 and 192.168.1.106 on port 3000. GET/POST/PUT allowed.
+- Frontend `NEXT_PUBLIC_API_BASE_URL`: optional public API address only. Default
+  uses the browser hostname with port 8000. No secrets belong in NEXT_PUBLIC values.
+- If laptop IP changes, update CORS_ORIGINS and frontend allowedDevOrigins.
+
+Authentication is intentionally absent. CORS is not access control. Keep this
+single-user development service on a trusted network.
+
+## Tests and verification
 
 ```powershell
-$env:CORS_ORIGINS = 'http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.200:3000'
-.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Use actual origins, with no path or trailing slash. Restart after changes. The
-example `.200` address is a placeholder for a changed laptop IP. Also update
-`frontend/next.config.ts`'s `allowedDevOrigins` if the laptop IP changes; that
-separate Next.js setting permits its development JavaScript requests.
-
-The frontend defaults to the page's scheme and hostname with port 8000, so a phone
-does not accidentally call its own localhost. Optionally set
-`NEXT_PUBLIC_API_BASE_URL` in `frontend/.env.local` (see its `.env.example`). This
-public value is embedded by Next.js: restart development/rebuild production after
-changing it. Never put secrets in a `NEXT_PUBLIC_` variable. The local HTTP defaults
-are not deployment configuration; deployment will need explicit HTTPS URLs and
-an appropriate origin allowlist.
-
-## Checks
-
-From `backend/`:
-
-```powershell
+cd 'C:\Users\lewis\Documents\Adaptive Athlete\adaptive-athlete\backend'
 .\.venv\Scripts\python.exe -m pytest -q
 .\.venv\Scripts\python.exe -m pip check
-Invoke-RestMethod http://localhost:8000/health
-Invoke-RestMethod http://192.168.1.106:8000/health
+
+cd '..\frontend'
+npm.cmd run lint
+npm.cmd test
+npm.cmd run typecheck
+npm.cmd run build
 ```
 
-Tests use FastAPI's `TestClient`: they import/start the application, verify the
-health response, permitted and denied CORS requests, and an overridden allowlist.
-No running server is required for pytest; the last two commands need Uvicorn.
+Normal tests do not depend on Supabase. Optional PostgreSQL tests require
+TEST_DATABASE_URL. The workout tests create fresh isolated schemas, verify
+transactions/concurrent requests, and remove only those generated schemas. The
+older standalone-set test expects a separate test database.
 
-The tested Starlette 1.6.0/AnyIO 4.15.1 stack currently emits two upstream
-deprecation warnings about TestClient's HTTPX support and a BlockingPortal alias.
-Tests pass; these warnings are not hidden or application errors.
+An explicit manual smoke test can safely exercise the configured PostgreSQL
+connection using disposable schema isolation (requires schema-create permissions):
 
-From `frontend/`: `npm.cmd run lint`, `npm.cmd test`, `npm.cmd run typecheck`, and
-`npm.cmd run build` verify the existing app and the health-request helper.
+```powershell
+cd 'C:\Users\lewis\Documents\Adaptive Athlete\adaptive-athlete\backend'
+.\.venv\Scripts\python.exe -m scripts.verify_workouts --configured-database
+```
 
-## Files and dependencies
+This verifies migration repeatability, v2, save/reopen/resume through fresh app/DB
+connections, duplicate/stale requests, partial/full/cancelled finish, progression,
+history, adherence and persistent rotation. It never changes app_private records.
 
-- `app/main.py`: app creation, small environment-based CORS setup and router registration.
-- `app/api/routes/health.py`: typed Pydantic response and the health route.
-- `app/**/__init__.py`: mark the directories as Python packages.
-- `tests/test_health.py`: health and CORS tests.
-- `requirements.txt`: FastAPI (routing/OpenAPI), Pydantic (typed response validation),
-  Uvicorn (HTTP server). No optional framework extras are needed.
-- `requirements-dev.txt`: adds pytest (test runner) and HTTPX (TestClient's HTTP
-  transport). Their own dependencies are installed automatically by pip.
-- `.gitignore`: excludes the virtual environment, caches, logs and local secrets.
+## Tonight's phone check
 
-New route modules can later be registered beside the health router. No speculative
-service/repository layers, database, auth, workout API, progression engine, analytics,
-Docker or deployment have been added. React still owns all mock workout state.
+1. Keep both servers running on the same network as the phone. Open Today.
+2. Start Session A; refresh; resume the same workout.
+3. Complete Back Squat 75 kg x 6 @ 2 RIR. Wait for Saved; refresh and check it.
+4. Reopen/edit a set, reorder an exercise and skip another; refresh and verify.
+5. Finish partially. Today should recommend B once; History and calendar show A.
+6. Restart FastAPI and refresh: history and rotation remain.
+7. Stop FastAPI during an edit: confirm pending/failed-save feedback and Retry;
+   restart and retry, waiting for Saved before leaving.
 
-## Next iteration
+Until a save is acknowledged, do not clear browser storage or use another device
+to replace that draft. A stale-tab conflict preserves the draft for explicit
+recovery. This is simple failure recovery, not a complete offline-sync system.
 
-Persist **one Back Squat set** (weight, reps and RIR): add a validated FastAPI POST,
-store it in PostgreSQL/Supabase, retrieve it through a GET, and display the saved
-values in the frontend after refresh. Establish that complete path before expanding
-to full sessions or progression rules.
+## Implementation verification
+
+Verified in this implementation session: 123 normal backend tests passed, with
+6 opt-in database tests skipped. Separately, all 5 isolated workout PostgreSQL
+integration tests passed against Supabase. Frontend: 26 tests, lint, TypeScript
+and production build passed. pip check passed. Live /health returned ok,
+/api/today returned four templates, and the frontend returned HTTP 200.
+Physical-phone/browser interaction was not verified because no browser automation
+surface was connected; complete the phone checklist before relying on it at the gym.
+
+## Files changed for the workout expansion
+
+| File (relative to repository root) | Purpose |
+| --- | --- |
+| backend/migrations/002_workout_sessions.sql | Add session, exercise and set tables |
+| backend/app/programme.py | Canonical prescriptions and configurable increments |
+| backend/app/progression.py | Pure previous-performance formatting and progression |
+| backend/app/workout_models.py | Typed API models and completed-set validation |
+| backend/app/workouts.py | Transactional lifecycle, history, rotation and prior lookup |
+| backend/app/api/routes/workouts.py | Real workout HTTP endpoints |
+| backend/app/main.py | Register routes and permit PUT through existing CORS |
+| backend/requirements.txt | Windows timezone data |
+| backend/scripts/verify_workouts.py | Explicit isolated PostgreSQL smoke check |
+| backend/tests/test_progression.py | Training-rule regressions |
+| backend/tests/test_workouts.py | Validation and API/service boundary tests |
+| backend/tests/test_workouts_postgres.py | Optional real DB lifecycle/concurrency/rollback tests |
+| backend/README.md | Runbook, schema and assumptions |
+| frontend/src/app/page.tsx | Load real workout flow |
+| frontend/src/app/layout.tsx | Remove preview metadata |
+| frontend/src/app/globals.css | Minimal save/history/reorder styles |
+| frontend/src/types/workout.ts | Persisted session/history contracts |
+| frontend/src/lib/workout-api.ts | LAN-aware API helpers and UUID generation |
+| frontend/src/lib/session-save-queue.ts | Debounce, serialized writes, draft/retry recovery |
+| frontend/src/lib/workout-session.ts | Preserve edits, add order/technique actions |
+| frontend/src/components/workout-flow.tsx | Start/save/resume/finish integration |
+| frontend/src/components/active-workout.tsx | Reorder, technique, pending-save controls |
+| frontend/src/components/set-input-row.tsx | Distinguish pending and acknowledged completion |
+| frontend/src/components/exercise-prescription.tsx | Honest first-use load prompt |
+| frontend/src/components/workout-detail.tsx | Real prescription/previous-result wording |
+| frontend/src/components/workout-complete.tsx | Persisted summary and backend feedback |
+| frontend/src/components/workout-history.tsx | Saved session list and detail selection |
+| frontend/src/components/today-screen.tsx | Real recommendation/history and empty state |
+| frontend/src/components/adherence-preview.tsx | Persisted calendar wording |
+| frontend/src/components/bottom-navigation.tsx | Enable History |
+| frontend/src/components/backend-status.tsx | Honest outage wording |
+| frontend/tests/persistence.test.mjs | Save queue and API request regression tests |
+| frontend/tests/workout-session.test.mjs | Updated and expanded UI/state regressions |
+| frontend/README.md | Frontend run/recovery instructions |
+
+Earlier uncommitted v2 files remain in the working tree; the expansion preserves
+the v2 migration, connection, standalone-set routes and persistence test page.

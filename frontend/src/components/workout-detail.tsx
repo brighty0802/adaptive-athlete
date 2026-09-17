@@ -18,12 +18,13 @@ export function WorkoutDetail({ workout, onStart, onBack, isResuming, otherSessi
         <p>{workout.focus}</p>
         <div className="hero-meta"><span><Icon name="clock" />~{workout.estimatedDurationMinutes} minutes</span><span>{workout.exercises.length} exercises</span></div>
       </div>
-      <p className="preview-info">Loads and previous performances are sample data. Your entries stay in this tab until you refresh.</p>
+      <p className="preview-info">Recommendations use your saved training. For a first exposure, choose a manageable starting load and record what you actually complete.</p>
       <ol className="exercise-list">
         {workout.exercises.map((exercise, index) => (
           <li className="panel exercise-detail" key={exercise.id}>
             <div className="exercise-title"><span className="exercise-number">{index + 1}</span><h2>{exercise.name}</h2></div>
             <ExercisePrescription exercise={exercise} />
+            <p className="previous-performance"><span>Previous performance</span>{exercise.previous}</p>
           </li>
         ))}
       </ol>

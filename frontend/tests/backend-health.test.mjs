@@ -7,13 +7,35 @@ const source = fs.readFileSync(new URL("../src/lib/backend-health.ts", import.me
 const { outputText } = ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2020 },
 });
-const { getHealthUrl, fetchBackendHealth } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+const { getBackendBaseUrl, getHealthUrl, fetchBackendHealth } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 
 test("health URL follows the browser host for laptop and phone, or uses an explicit override", () => {
   assert.equal(getHealthUrl("http://localhost:3000"), "http://localhost:8000/health");
   assert.equal(getHealthUrl("http://192.168.1.106:3000"), "http://192.168.1.106:8000/health");
   assert.equal(getHealthUrl("http://localhost:3000", " https://api.example/ "), "https://api.example/health");
   assert.equal(getHealthUrl("http://192.168.1.106:3000", " "), "http://192.168.1.106:8000/health");
+});
+
+test("production requires an explicit HTTPS backend and prevents mixed content", () => {
+  assert.equal(getBackendBaseUrl("https://frontend.example", " https://backend.example/ ", "production"), "https://backend.example");
+  assert.throws(() => getBackendBaseUrl("https://frontend.example", "", "production"), /NEXT_PUBLIC_API_BASE_URL/);
+  assert.throws(() => getBackendBaseUrl("https://frontend.example", "http://backend.example", "production"), /HTTPS/);
+  assert.throws(() => getBackendBaseUrl("https://frontend.example", "http://backend.example", "development"), /HTTPS/);
+  assert.throws(() => getBackendBaseUrl("https://frontend.example", "", "development"), /NEXT_PUBLIC_API_BASE_URL/);
+  assert.equal(getBackendBaseUrl("http://192.168.1.106:3000", "", "development"), "http://192.168.1.106:8000");
+});
+
+test("backend configuration rejects invalid schemes, embedded credentials and query strings", () => {
+  for (const base of ["bad-url", "postgresql://user:password@db.example/postgres", "https://user:password@api.example", "https://api.example?token=x", "https://api.example#fragment"]) {
+    assert.throws(() => getBackendBaseUrl("http://localhost:3000", base, "development"), /configuration|HTTP\(S\)/);
+  }
+});
+
+test("public environment URL is read at the central boundary", (t) => {
+  const previous = process.env.NEXT_PUBLIC_API_BASE_URL;
+  process.env.NEXT_PUBLIC_API_BASE_URL = "https://api.example";
+  t.after(() => { if (previous === undefined) delete process.env.NEXT_PUBLIC_API_BASE_URL; else process.env.NEXT_PUBLIC_API_BASE_URL = previous; });
+  assert.equal(getHealthUrl("https://frontend.example"), "https://api.example/health");
 });
 
 test("health request reads the API response and passes cancellation without credentials", async (t) => {

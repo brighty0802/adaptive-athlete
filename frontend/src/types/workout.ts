@@ -31,7 +31,7 @@ export interface ExercisePrescription {
   restSeconds: number;
   notes?: string;
   previous: string;
-  mockFeedback: string;
+  mockFeedback?: string;
 }
 
 export interface WorkoutDefinition extends WorkoutSummary {
@@ -50,6 +50,7 @@ export interface SetEntry {
 export interface ExerciseLog {
   exerciseId: string;
   skipped: boolean;
+  techniqueConfirmed: boolean;
   sets: SetEntry[];
 }
 
@@ -65,13 +66,29 @@ export type WorkoutScreen =
   | { kind: "today" }
   | { kind: "detail"; workoutId: WorkoutId }
   | { kind: "active" }
-  | { kind: "complete" };
+  | { kind: "complete" }
+  | { kind: "history" }
+  | { kind: "history-detail"; session: PersistedSession };
+
+export interface PersistedSession extends WorkoutSession {
+  id: string;
+  revision: number;
+  lastMutationId: string | null;
+  workout: WorkoutDefinition;
+  feedback: Record<string, string>;
+}
+
+export interface TodayResponse {
+  today: TodayData;
+  workouts: WorkoutDefinition[];
+  activeSession: PersistedSession | null;
+}
 
 export interface TodayData {
   athleteName: string;
   today: string;
   workouts: readonly WorkoutSummary[];
   recommendedWorkoutId: WorkoutId;
-  lastCompletedWorkout: CompletedWorkout;
+  lastCompletedWorkout: CompletedWorkout | null;
   completedWorkouts: readonly CompletedWorkout[];
 }

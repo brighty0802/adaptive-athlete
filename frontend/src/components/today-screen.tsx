@@ -8,7 +8,8 @@ import { WorkoutCard } from "./workout-card";
 
 export function TodayScreen({ data, onOpenWorkout }: { data: TodayData; onOpenWorkout: (id: WorkoutId) => void }) {
   const recommended = data.workouts.find((workout) => workout.id === data.recommendedWorkoutId)!;
-  const last = data.workouts.find((workout) => workout.id === data.lastCompletedWorkout.workoutId)!;
+  const lastCompleted = data.lastCompletedWorkout;
+  const last = data.workouts.find((workout) => workout.id === lastCompleted?.workoutId);
 
   return (
     <>
@@ -45,18 +46,18 @@ export function TodayScreen({ data, onOpenWorkout }: { data: TodayData; onOpenWo
               </button>
               <p className="start-note">Review your workout, then start when you’re ready.</p>
             </section>
-            <section className="last-workout panel" aria-label="Last completed workout">
+            {lastCompleted && last ? <section className="last-workout panel" aria-label="Last completed workout">
               <span className="completed-icon"><Icon name="check" /></span>
               <div>
-                <p className="eyebrow">LAST COMPLETED{data.lastCompletedWorkout.status === "partial" ? " · PARTIAL" : ""}</p>
+                <p className="eyebrow">LAST COMPLETED{lastCompleted.status === "partial" ? " · PARTIAL" : ""}</p>
                 <h2>{last.name} <span>— {last.focus}</span></h2>
                 <p>
-                  <time dateTime={data.lastCompletedWorkout.date}>
-                    {formatCalendarDate(data.lastCompletedWorkout.date, { weekday: "short", day: "numeric", month: "short" })}
-                  </time> <span aria-hidden="true">·</span> {data.lastCompletedWorkout.durationMinutes} min
+                  <time dateTime={lastCompleted.date}>
+                    {formatCalendarDate(lastCompleted.date, { weekday: "short", day: "numeric", month: "short" })}
+                  </time> <span aria-hidden="true">·</span> {lastCompleted.durationMinutes} min
                 </p>
               </div>
-            </section>
+            </section> : <section className="last-workout panel"><div><p className="eyebrow">YOUR FIRST SESSION</p><p>No finished workouts yet. Start Session A, or choose any session below.</p></div></section>}
             <section className="workouts" aria-labelledby="workouts-heading">
               <div className="section-heading">
                 <h2 id="workouts-heading">Your four sessions</h2>
@@ -79,7 +80,7 @@ export function TodayScreen({ data, onOpenWorkout }: { data: TodayData; onOpenWo
           </div>
           <aside className="activity-column">
             <AdherencePreview today={data.today} sessions={data.completedWorkouts} workouts={data.workouts} />
-            <p className="sample-note">Preview activity · refresh clears newly logged workouts.</p>
+            <p className="sample-note">Completed and partial workouts count toward your activity.</p>
             <div className="brand-footer" aria-hidden="true">
               <Icon name="brand" />
               <p>STRONGER TODAY.<br />FASTER TOMORROW.</p>

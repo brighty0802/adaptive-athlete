@@ -2,6 +2,7 @@ import type { ExercisePrescription as Prescription } from "@/types/workout";
 
 export function loadLabel(exercise: Prescription): string {
   if (exercise.loadKind === "none") return "Bodyweight";
+  if (exercise.proposedLoadKg === null) return "Choose your starting load";
   if (exercise.loadKind === "added") return exercise.proposedLoadKg === 0 ? "Bodyweight (+0 kg)" : `+${exercise.proposedLoadKg} kg added`;
   return `${exercise.proposedLoadKg} kg${exercise.loadKind === "per-hand" ? " per hand" : " total"}`;
 }

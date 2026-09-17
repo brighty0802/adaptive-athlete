@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Today | Adaptive Athlete",
-  description: "Your training, in focus. A preview of the Adaptive Athlete workout dashboard.",
+  description: "Your training, in focus. Persistent workouts, history and progression.",
 };
 
 export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#090c0b" };
