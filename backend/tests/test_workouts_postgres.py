@@ -46,6 +46,45 @@ def test_full_workout_lifecycle_and_progression(isolated_database):
     verify(isolated_database)
 
 
+def test_corrections_preserve_history_rotation_and_update_progression(isolated_database):
+    with isolated_database.client() as client:
+        original = start(client)
+        path = f'/api/sessions/{original["id"]}'
+        logs = deepcopy(original["exercises"])
+        for log, prescription in zip(logs, original["workout"]["exercises"]):
+            log["techniqueConfirmed"] = True
+            for entry in log["sets"]:
+                entry.update(weight="75", amount=str(prescription["range"][1]), rir="2", touched=True, completed=True)
+        saved = client.put(path, json=mutation(original, exercises=logs)).json()
+        finished = client.post(path + '/finish', json=mutation(saved)).json()
+        assert finished["status"] == "completed"
+        before = client.get('/api/today').json()
+        assert before["workouts"][0]["exercises"][1]["proposedLoadKg"] == 77.5
+        logs = deepcopy(finished["exercises"])
+        logs[1]["sets"][0]["amount"] = "5"
+        logs[-1]["sets"][-1]["completed"] = False
+        body = mutation(finished, exercises=logs)
+        response = client.put(path + '/correction', json=body)
+        assert response.status_code == 200
+        corrected = response.json()
+        assert corrected["status"] == "partial"
+        for key in ("id", "startedAt", "finishedAt", "workout"):
+            assert corrected[key] == finished[key]
+        assert corrected["revision"] == finished["revision"] + 1
+        assert client.put(path + '/correction', json=body).json() == corrected
+        assert client.get(path).json() == corrected
+        assert client.get('/api/sessions').json() == [corrected]
+        after = client.get('/api/today').json()
+        assert after["today"]["recommendedWorkoutId"] == before["today"]["recommendedWorkoutId"] == "session-b"
+        assert after["today"]["completedWorkouts"][0]["date"] == before["today"]["completedWorkouts"][0]["date"]
+        assert after["workouts"][0]["exercises"][1]["proposedLoadKg"] == 75
+        next_session = start(client, "session-b")
+        rejected = client.put(path + '/correction', json=mutation(corrected, exercises=logs))
+        assert rejected.status_code == 409
+        assert client.get(path).json() == corrected
+        assert client.get('/api/today').json()["activeSession"]["id"] == next_session["id"]
+
+
 def test_invalid_saves_and_database_failure_leave_original_session_intact(isolated_database, monkeypatch):
     with isolated_database.client() as client:
         original = start(client)

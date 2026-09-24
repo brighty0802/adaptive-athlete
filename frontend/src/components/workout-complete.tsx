@@ -2,8 +2,9 @@ import type { WorkoutDefinition, WorkoutSession } from "@/types/workout";
 import { exerciseStatus, sessionCounts } from "@/lib/workout-session";
 import { Icon } from "./icon";
 
-export function WorkoutComplete({ workout, session, onToday, backLabel = "Back to Today" }: {
+export function WorkoutComplete({ workout, session, onToday, backLabel = "Back to Today", onCorrect }: {
   workout: WorkoutDefinition; session: WorkoutSession & { feedback?: Record<string, string> }; onToday: () => void; backLabel?: string;
+  onCorrect?: () => void;
 }) {
   const counts = sessionCounts(session);
   const minutes = Math.max(0, Math.round(((session.finishedAt ?? session.startedAt) - session.startedAt) / 60000));
@@ -52,6 +53,10 @@ export function WorkoutComplete({ workout, session, onToday, backLabel = "Back t
         {counts.completedExercises === 0 && <p>No fully completed exercises. Partial work is shown above; skipped work is not a performance failure.</p>}
       </section>
       <p className="preview-info">Saved workouts remain available after refreshing or restarting the backend.</p>
+      {onCorrect && <section className="panel sync-panel">
+        <button type="button" className="secondary-button" onClick={onCorrect}>Edit saved workout</button>
+        <p>Correct the latest finished workout within seven days, before starting another. Its date and rotation position stay unchanged.</p>
+      </section>}
       <button type="button" className="start-button" onClick={onToday}>{backLabel}<Icon name="arrow" /></button>
     </div>
   );

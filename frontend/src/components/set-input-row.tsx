@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ExercisePrescription, SetEntry } from "@/types/workout";
-import { validateSet } from "@/lib/workout-session";
+import { setRangeWarning, validateSet } from "@/lib/workout-session";
 
 export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen, pending = false }: {
   exercise: ExercisePrescription;
@@ -13,6 +13,7 @@ export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen
 }) {
   const [showErrors, setShowErrors] = useState(false);
   const error = showErrors ? validateSet(set, exercise) : null;
+  const warning = setRangeWarning(set, exercise);
   const prefix = `${exercise.id}-set-${index}`;
   const amountLabel = `${exercise.measurement === "seconds" ? "Seconds" : "Reps"}${exercise.perSide ? " / side" : ""}`;
 
@@ -32,6 +33,7 @@ export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen
           <label htmlFor={`${prefix}-weight`}>
             {exercise.loadKind === "added" ? "Added kg" : exercise.loadKind === "per-hand" ? "kg / hand" : "Weight kg"}
             <input id={`${prefix}-weight`} type="number" inputMode="decimal" min="0" max="2000" step="0.25"
+              placeholder={exercise.proposedLoadKg === null ? "Starting load" : String(exercise.proposedLoadKg)}
               value={set.weight} disabled={set.completed} onChange={(event) => onEdit("weight", event.target.value)}
               aria-describedby={error ? `${prefix}-error` : undefined} />
           </label>
@@ -40,7 +42,7 @@ export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen
           {amountLabel}
           <input id={`${prefix}-amount`} type="number" inputMode="numeric" min="0" max={exercise.measurement === "seconds" ? 3600 : 1000} step="1"
             placeholder={String(exercise.quickTarget)} value={set.amount} disabled={set.completed}
-            onChange={(event) => onEdit("amount", event.target.value)} aria-describedby={error ? `${prefix}-error` : undefined} />
+            onChange={(event) => onEdit("amount", event.target.value)} aria-describedby={error ? `${prefix}-error` : warning ? `${prefix}-warning` : undefined} />
         </label>
         {exercise.targetRir !== null && (
           <label htmlFor={`${prefix}-rir`}>
@@ -51,6 +53,7 @@ export function SetInputRow({ exercise, set, index, onEdit, onComplete, onReopen
           </label>
         )}
       </div>
+      {warning && <p className="range-warning" id={`${prefix}-warning`} role="status">{warning}</p>}
       <button className={set.completed ? "text-button" : "secondary-button"} type="button" onClick={set.completed ? onReopen : complete}>
         {set.completed ? "Edit Set" : "Complete Set"}
       </button>

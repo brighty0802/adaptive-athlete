@@ -138,8 +138,18 @@ def save_session(connection, session_id: UUID, request: SaveSession) -> dict:
     if not check_revision(session, request):
         return session
     validate_exercises(request.exercises, session["workout"])
-    prescriptions = {exercise["id"]: exercise for exercise in session["workout"]["exercises"]}
-    for order, log in enumerate(request.exercises):
+    write_exercises(connection, session_id, request.exercises, session["workout"])
+    connection.execute(
+        "UPDATE app_private.workout_sessions SET revision = revision + 1, last_mutation_id = %s WHERE id = %s",
+        (request.mutationId, session_id),
+    )
+    return read_session(connection, session_id)
+
+
+def write_exercises(connection, session_id: UUID, exercises: list[ExerciseLog], workout: dict) -> None:
+    """Shared writes after validation; the caller owns the transaction and row lock."""
+    prescriptions = {exercise["id"]: exercise for exercise in workout["exercises"]}
+    for order, log in enumerate(exercises):
         performance = connection.execute(
             """UPDATE app_private.exercise_performances SET actual_order = %s, skipped = %s,
                technique_confirmed = %s WHERE session_id = %s AND exercise_id = %s RETURNING id""",
@@ -163,9 +173,41 @@ def save_session(connection, session_id: UUID, request: SaveSession) -> dict:
                  amount if prescription["measurement"] == "seconds" else None,
                  rir, Jsonb(entry.model_dump(exclude={"completed"})), performance["id"], number),
             )
+
+
+def correct_session(connection, session_id: UUID, request: SaveSession) -> dict:
+    # Use the same lock as start_session: a new prescription must not be
+    # snapshotted halfway through a correction to its previous performance.
+    connection.execute("SELECT pg_advisory_xact_lock(8172043)")
+    session = read_session(connection, session_id, lock=True)
+    if session["status"] not in ("completed", "partial"):
+        raise HTTPException(409, "Only finished training sessions can be corrected.")
+    if session["lastMutationId"] == str(request.mutationId):
+        return session  # A lost-response retry never applies the correction twice.
+    if session["revision"] != request.revision:
+        raise HTTPException(409, "Workout changed. Reload its saved version before correcting it.")
+    latest = connection.execute(
+        """SELECT id, finished_at >= clock_timestamp() - interval '7 days' AS recent
+           FROM app_private.workout_sessions ORDER BY started_at DESC, id DESC LIMIT 1""",
+    ).fetchone()
+    if not latest or str(latest["id"]) != str(session_id) or not latest["recent"]:
+        raise HTTPException(409, "Correct only the latest finished workout within seven days, before starting another.")
+    validate_exercises(request.exercises, session["workout"])
+    entries = [entry for log in request.exercises for entry in log.sets]
+    completed = sum(entry.completed for entry in entries)
+    if completed == 0:
+        raise HTTPException(422, "A correction must retain at least one completed set.")
+    status = "completed" if completed == len(entries) else "partial"
+    logs = {log.exerciseId: log.model_dump() for log in request.exercises}
+    feedback = {exercise["id"]: feedback_for_exercise(exercise, logs[exercise["id"]])
+                for exercise in session["workout"]["exercises"]}
+    write_exercises(connection, session_id, request.exercises, session["workout"])
+    # Keep identity, start/finish dates and prescription: history keeps one entry,
+    # calendar stays on its original day and rotation stays at the same position.
     connection.execute(
-        "UPDATE app_private.workout_sessions SET revision = revision + 1, last_mutation_id = %s WHERE id = %s",
-        (request.mutationId, session_id),
+        """UPDATE app_private.workout_sessions SET status = %s, feedback = %s,
+           revision = revision + 1, last_mutation_id = %s WHERE id = %s""",
+        (status, Jsonb(feedback), request.mutationId, session_id),
     )
     return read_session(connection, session_id)
 

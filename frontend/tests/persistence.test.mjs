@@ -13,7 +13,7 @@ async function load(file) {
   return import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
 }
 const { SessionSaveQueue, readDraft, DRAFT_KEY } = await load("session-save-queue");
-const { workoutApi, newId } = await load("workout-api");
+const { workoutApi, newId, backendIsWaking, subscribeBackendWait, BACKEND_TIMEOUT_MS } = await load("workout-api");
 const baseline = () => ({ id: "session-1", revision: 0, lastMutationId: null, status: "in_progress", exercises: [
   { exerciseId: "back-squat", skipped: false, techniqueConfirmed: false, sets: [{ weight: "75", amount: "", rir: "", touched: false, completed: false }] },
 ] });
@@ -142,4 +142,61 @@ test("API reports conflict, validation and offline errors without server details
   mock.mock.mockImplementation(async () => { throw new TypeError("Failed to fetch"); });
   await assert.rejects(workoutApi.today(), /Could not reach the backend/);
   assert.match(newId(), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+});
+
+test("cold starts show waiting state and remain live beyond the former 12-second timeout", async (t) => {
+  globalThis.window = { location: { origin: "http://localhost:3000" } };
+  t.after(() => { delete globalThis.window; });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let respond, signal;
+  const states = [];
+  const unsubscribe = subscribeBackendWait(() => states.push(backendIsWaking()));
+  t.after(unsubscribe);
+  t.mock.method(globalThis, "fetch", (_, options) => { signal = options.signal; return new Promise((resolve) => { respond = resolve; }); });
+  const request = workoutApi.today();
+  t.mock.timers.tick(4000);
+  assert.equal(backendIsWaking(), true);
+  t.mock.timers.tick(61000);
+  assert.equal(signal.aborted, false);
+  respond(Response.json({ ready: true }));
+  assert.deepEqual(await request, { ready: true });
+  assert.equal(backendIsWaking(), false);
+  assert.deepEqual(states, [true, false]);
+});
+
+test("cold-start deadline cleans up and allows an explicit retry", async (t) => {
+  globalThis.window = { location: { origin: "http://localhost:3000" } };
+  t.after(() => { delete globalThis.window; });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const mock = t.mock.method(globalThis, "fetch", (_, options) => new Promise((_, reject) => {
+    options.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  }));
+  const request = workoutApi.history();
+  const failed = assert.rejects(request, /may still be waking up/);
+  t.mock.timers.tick(BACKEND_TIMEOUT_MS);
+  await failed;
+  assert.equal(backendIsWaking(), false);
+  mock.mock.mockImplementation(async () => Response.json([]));
+  assert.deepEqual(await workoutApi.history(), []);
+});
+
+test("temporary gateway errors retry reads but never automatically replay corrections", async (t) => {
+  globalThis.window = { location: { origin: "http://localhost:3000" } };
+  t.after(() => { delete globalThis.window; });
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  let calls = 0;
+  const mock = t.mock.method(globalThis, "fetch", async () => ++calls === 1 ? new Response(null, { status: 503 }) : Response.json([]));
+  const request = workoutApi.history();
+  await Promise.resolve();
+  t.mock.timers.tick(1500);
+  assert.deepEqual(await request, []);
+  assert.equal(calls, 2);
+  const writes = [];
+  mock.mock.mockImplementation(async (url, options) => { writes.push([url, options]); return new Response(null, { status: 503 }); });
+  const correction = { revision: 4, mutationId: "same-mutation", exercises: logs() };
+  await assert.rejects(workoutApi.correct("session-1", correction), (error) => error.status === 503);
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0][0], "http://localhost:8000/api/sessions/session-1/correction");
+  assert.equal(writes[0][1].method, "PUT");
+  assert.deepEqual(JSON.parse(writes[0][1].body), correction);
 });

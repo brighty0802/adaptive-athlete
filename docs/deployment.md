@@ -83,11 +83,13 @@ has been removed. See [Render FastAPI deployment](https://render.com/docs/deploy
 ### Free service behaviour during a gym session
 
 Render Free sleeps after 15 minutes without inbound traffic and takes about a
-minute to wake. The app's existing 12-second API timeout can therefore show a
-connection error during wake-up. Before training, open the Render `/health` URL
-and wait for the JSON response, then open/reload Today. If it sleeps during a
-long break, wait for it to wake and use **Retry Save** for pending entries; keep
-the page open until **Saved** appears. Do not clear browser drafts.
+minute to wake. The v1.1 frontend allows up to 90 seconds per API request and
+shows **Waking backend...** after four seconds. Reads retry temporary gateway
+errors within that deadline. If it still cannot connect, use the displayed retry
+controls; writes are not blindly replayed. Before training you can also open
+Render's `/health` and wait for JSON. Keep pending entries open until **Saved**
+appears. Do not clear browser drafts. Deploy the v1.1 backend before its frontend
+to make the new finished-workout correction endpoint available.
 
 Saved records stay in Supabase across sleeps/restarts. Render's local filesystem
 is ephemeral. Free services have shared monthly instance-hour, bandwidth and

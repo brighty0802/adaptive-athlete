@@ -29,7 +29,8 @@ function load(relative) {
 }
 
 const { mockWorkoutDefinitions: workouts } = load(path.join(root, "data/mock-workouts"));
-const { createSession, updateSession, finishSession, sessionCounts, validateSet } = load(path.join(root, "lib/workout-session"));
+const { createSession, updateSession, finishSession, sessionCounts, validateSet, setRangeWarning } = load(path.join(root, "lib/workout-session"));
+const { SetInputRow } = load(path.join(root, "components/set-input-row"));
 const { WorkoutDetail } = load(path.join(root, "components/workout-detail"));
 const { ActiveWorkout } = load(path.join(root, "components/active-workout"));
 const { WorkoutComplete } = load(path.join(root, "components/workout-complete"));
@@ -50,7 +51,7 @@ test("all four details use the correct programme and labelled prescriptions", ()
       assert.ok(html.includes(exercise.name));
       assert.equal(validateSet({ weight: exercise.proposedLoadKg === null ? "" : String(exercise.proposedLoadKg), amount: String(exercise.quickTarget), rir: exercise.quickRir === null ? "" : String(exercise.quickRir) }, exercise), null);
     }
-    assert.ok(html.includes("Proposed load"));
+    assert.ok(html.includes("Current recommendation"));
     assert.ok(html.includes("Start Workout"));
   }
 });
@@ -187,4 +188,67 @@ test("Today has an honest empty history and zero adherence", () => {
   const html = renderToStaticMarkup(React.createElement(TodayScreen, { data, onOpenWorkout: noop }));
   assert.ok(html.includes("0 sessions"));
   assert.ok(!html.includes("calendar-day trained"));
+});
+
+test("out-of-range reps and seconds warn without blocking completion", () => {
+  const soleus = workouts[2].exercises.find((exercise) => exercise.id === "soleus-raise");
+  const unusual = { weight: "5", amount: "1", rir: "1", touched: true, completed: false };
+  assert.match(setRangeWarning(unusual, soleus), /1 reps.*10–15 reps/);
+  assert.equal(validateSet(unusual, soleus), null);
+  let session = createSession(workouts[2], 1000);
+  session.exercises.find((log) => log.exerciseId === soleus.id).sets[0] = unusual;
+  session = updateSession(session, workouts[2], { type: "complete-set", exerciseId: soleus.id, setIndex: 0 });
+  assert.equal(session.exercises.find((log) => log.exerciseId === soleus.id).sets[0].completed, true);
+  for (const value of ["10", "15"]) assert.equal(setRangeWarning({ ...unusual, amount: value }, soleus), null);
+  assert.match(setRangeWarning({ ...unusual, amount: "16" }, soleus), /outside/);
+  assert.match(setRangeWarning({ ...unusual, amount: "0" }, soleus), /outside/);
+  for (const value of ["", "NaN", "-1", "1.5"]) assert.equal(setRangeWarning({ ...unusual, amount: value }, soleus), null);
+  const timed = workouts[2].exercises.find((exercise) => exercise.measurement === "seconds");
+  const warning = setRangeWarning(unusual, timed);
+  assert.match(warning, /seconds/); assert.ok(!warning.includes("reps"));
+  assert.equal(setRangeWarning(unusual, { ...soleus, measurement: "distance" }), null);
+  const html = renderToStaticMarkup(React.createElement(SetInputRow, {
+    exercise: soleus, set: { ...unusual, completed: true }, index: 0, onEdit: noop, onComplete: noop, onReopen: noop,
+  }));
+  assert.match(html, /outside the prescribed/); assert.match(html, /Edit Set/);
+});
+
+test("unfinished Nordic drafts are named before finishing and never counted as completed", () => {
+  const definition = workouts[2];
+  let session = createSession(definition, 1000);
+  const nordic = definition.exercises.find((exercise) => exercise.id === "nordic-curl");
+  session = updateSession(session, definition, { type: "edit", exerciseId: nordic.id, setIndex: 0, field: "amount", value: "1" });
+  session = updateSession(session, definition, { type: "prescribed", exerciseId: definition.exercises[0].id });
+  const html = renderToStaticMarkup(React.createElement(ActiveWorkout, { workout: definition, session, onAction: noop, onFinish: noop, onBack: noop }));
+  assert.match(html, /Unfinished work/);
+  assert.match(html, /Nordic Hamstring Curl<\/strong>: sets 1, 2 not marked complete/);
+  assert.match(html, /deliberately finish as a partial workout/);
+  assert.equal(finishSession(session, 61000).status, "partial");
+  assert.equal(session.exercises.find((log) => log.exerciseId === nordic.id).sets[0].completed, false);
+  assert.equal(session.exercises.find((log) => log.exerciseId === nordic.id).sets[1].amount, "");
+});
+
+test("first exposure and established recommendations are distinct from previous results", () => {
+  const fresh = structuredClone(workout);
+  fresh.exercises[1].proposedLoadKg = null;
+  fresh.exercises[1].previous = "No previous performance";
+  const html = renderToStaticMarkup(React.createElement(WorkoutDetail, { workout: fresh, onStart: noop, onBack: noop }));
+  assert.match(html, /No established load yet/);
+  assert.match(html, /Choose your starting load/);
+  assert.match(html, /Current recommendation/);
+  assert.match(html, /Previous performance/);
+  const established = renderToStaticMarkup(React.createElement(WorkoutDetail, { workout, onStart: noop, onBack: noop }));
+  assert.match(established, /Current recommendation/);
+  assert.match(established, /Previous performance/);
+});
+
+test("correction mode offers explicit save and never claims to autosave or finish again", () => {
+  const session = createSession(workout, 1000);
+  const html = renderToStaticMarkup(React.createElement(ActiveWorkout, { workout, session, correction: true, onAction: noop, onFinish: noop, onBack: noop }));
+  assert.match(html, /Save corrections/);
+  assert.ok(!html.includes("Entries save automatically"));
+  assert.ok(!html.includes(">Finish Workout<"));
+  const completed = renderToStaticMarkup(React.createElement(WorkoutComplete, { workout, session, onToday: noop, onCorrect: noop }));
+  assert.match(completed, /Edit saved workout/);
+  assert.match(completed, /within seven days/);
 });

@@ -53,3 +53,9 @@ def save_session(session_id: UUID, request: SaveSession):
 def finish_session(session_id: UUID, request: Mutation):
     with connect_database() as connection:
         return workouts.finish_session(connection, session_id, request)
+
+
+@router.put("/sessions/{session_id}/correction", response_model=PersistedSession)
+def correct_session(session_id: UUID, request: SaveSession):
+    with connect_database() as connection:
+        return workouts.correct_session(connection, session_id, request)

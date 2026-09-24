@@ -10,6 +10,7 @@ export interface WorkoutSummary {
 }
 
 export interface CompletedWorkout {
+  id?: string;
   workoutId: WorkoutId;
   date: string; // Calendar date: YYYY-MM-DD, Europe/London.
   durationMinutes: number;
@@ -68,6 +69,7 @@ export type WorkoutScreen =
   | { kind: "active" }
   | { kind: "complete" }
   | { kind: "history" }
+  | { kind: "correction"; session: PersistedSession }
   | { kind: "history-detail"; session: PersistedSession };
 
 export interface PersistedSession extends WorkoutSession {

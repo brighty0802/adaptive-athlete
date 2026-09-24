@@ -18,9 +18,12 @@ export function ExercisePrescription({ exercise }: { exercise: Prescription }) {
       <dl className="prescription-grid">
         <div><dt>Working sets</dt><dd>{targetLabel(exercise)}</dd></div>
         <div><dt>Target RIR</dt><dd>{exercise.targetRir ? exercise.targetRir.join("–") : "N/A · quality"}</dd></div>
-        <div><dt>Proposed load</dt><dd>{loadLabel(exercise)}</dd></div>
+        <div><dt>Current recommendation</dt><dd>{loadLabel(exercise)}</dd></div>
         <div><dt>Rest</dt><dd>{exercise.restSeconds} sec</dd></div>
       </dl>
+      {exercise.loadKind !== "none" && exercise.proposedLoadKg === null && <p className="starting-load-note">
+        No established load yet. Choose a starting load and enter it in each set’s weight field. Your saved performance will guide the next recommendation.
+      </p>}
       {exercise.notes && <p className="exercise-note">{exercise.notes}</p>}
     </>
   );

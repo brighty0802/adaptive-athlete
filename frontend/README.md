@@ -39,6 +39,28 @@ Templates, previous performance, load recommendations, final status and rotation
 come from the backend. History and adherence use saved records, never mock data.
 The original /persistence-test remains available for v2 debugging.
 
+## v1.1 field-test improvements
+
+- Out-of-range reps or seconds show an advisory warning, including on completed
+  sets. Valid unusual values can still be completed and saved.
+- Exercise cards and the finish area explicitly list unfinished sets by name.
+  Finishing partial work preserves draft inputs without counting them as results.
+- First exposures explain choosing a starting load; current recommendations and
+  previous results remain separately labelled.
+- From the latest finished workout summary/history, choose **Edit saved workout**.
+  Corrections are allowed within seven days, before starting another workout.
+  Edit values, mark intended sets complete, then **Save corrections**. Dates and
+  rotation stay unchanged; feedback/history are recalculated. Keep at least one
+  completed set. This editor saves explicitly and keeps unsaved edits only on
+  the current page; leaving prompts before discarding them. Ambiguous failures
+  lock further edits until an exact retry is acknowledged or you return to history.
+- API requests allow up to 90 seconds, with **Waking backend...** after four
+  seconds. GET requests retry temporary 502/503/504 responses within that limit;
+  writes retain explicit retry/mutation-ID handling. No keep-alive polling is added.
+
+Deploy the updated backend before the frontend so the correction endpoint exists.
+No schema changes or changes to existing real workout records are needed to ship.
+
 ## Checks
 
 ```powershell

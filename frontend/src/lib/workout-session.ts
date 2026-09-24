@@ -39,6 +39,17 @@ export function validateSet(set: SetEntry, exercise: ExercisePrescription): stri
   return null;
 }
 
+/** Advisory only: unusual but valid performance must remain recordable. */
+export function setRangeWarning(set: SetEntry, exercise: ExercisePrescription): string | null {
+  if (exercise.measurement !== "reps" && exercise.measurement !== "seconds") return null;
+  if (!validNumber(set.amount, 0, exercise.measurement === "seconds" ? 3600 : 1000, true)) return null;
+  const amount = Number(set.amount);
+  const [minimum, maximum] = exercise.range;
+  if (amount >= minimum && amount <= maximum) return null;
+  const unit = exercise.measurement === "seconds" ? "seconds" : "reps";
+  return `${amount} ${unit}${exercise.perSide ? " per side" : ""} is outside the prescribed ${minimum}–${maximum} ${unit}. Check your entry; if intentional, you can still complete and save this set.`;
+}
+
 export function exerciseStatus(log: ExerciseLog): "not_started" | "in_progress" | "completed" | "skipped" {
   if (log.sets.every((set) => set.completed)) return "completed";
   if (log.skipped) return "skipped";

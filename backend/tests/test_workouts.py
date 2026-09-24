@@ -14,7 +14,7 @@ from app import workouts
 from app.api.routes import workouts as routes
 from app.database import DatabaseNotConfigured
 from app.main import create_app
-from app.workout_models import ExerciseLog, Mutation, numeric, validate_exercises
+from app.workout_models import ExerciseLog, Mutation, SaveSession, numeric, validate_exercises
 
 
 def prescription(exercise_id="back-squat", **changes):
@@ -184,6 +184,7 @@ def test_all_database_failures_are_sanitized(monkeypatch, error_type):
             ("POST", "/api/sessions", {"id": data["id"], "workoutId": "session-a"}),
             ("PUT", f'/api/sessions/{data["id"]}', {**mutation, "exercises": data["exercises"]}),
             ("POST", f'/api/sessions/{data["id"]}/finish', mutation),
+            ("PUT", f'/api/sessions/{data["id"]}/correction', {**mutation, "exercises": data["exercises"]}),
         ]
         for method, path, body in requests:
             response = client.request(method, path, json=body)
@@ -302,3 +303,87 @@ def test_previous_mapping_preserves_snapshot_baseline_over_legacy_set():
     assert previous["sets"] == row["sets"]
     assert previous["date"] == "2026-07-02"
     assert previous["techniqueConfirmed"] is True
+
+
+def correction_fixture(monkeypatch):
+    data = session()
+    data.update(status="partial", finishedAt=data["startedAt"] + 3600000, revision=4)
+    data["exercises"][0]["sets"][0]["completed"] = True
+    monkeypatch.setattr(workouts, "read_session", lambda *_args, **_kwargs: data)
+    connection = MagicMock()
+    connection.execute.return_value.fetchone.return_value = {"id": data["id"], "recent": True}
+    return data, connection
+
+
+@pytest.mark.parametrize("complete_all,expected", [(False, "partial"), (True, "completed")])
+def test_correction_recomputes_feedback_preserves_dates_and_writes_existing_rows(monkeypatch, complete_all, expected):
+    data, connection = correction_fixture(monkeypatch)
+    logs = deepcopy(data["exercises"])
+    for log in logs:
+        log["techniqueConfirmed"] = True
+        for entry in log["sets"]:
+            entry.update(amount="30" if log["exerciseId"] == "copenhagen-adduction" else "6")
+            if complete_all:
+                entry["completed"] = True
+    request = SaveSession(revision=4, mutationId=uuid4(), exercises=logs)
+    workouts.correct_session(connection, data["id"], request)
+    calls = connection.execute.call_args_list
+    assert "pg_advisory_xact_lock(8172043)" in calls[0].args[0]
+    assert "interval '7 days'" in calls[1].args[0]
+    sql, params = calls[-1].args
+    assert params[0] == expected
+    assert params[1].obj["back-squat"] == workouts.feedback_for_exercise(data["workout"]["exercises"][0], logs[0])
+    assert params[2:] == (request.mutationId, data["id"])
+    assert "finished_at" not in sql and "started_at" not in sql and "prescription" not in sql
+    assert all("INSERT" not in call.args[0] and "DELETE" not in call.args[0] for call in calls)
+    set_writes = [call for call in calls if "UPDATE app_private.workout_sets" in call.args[0]]
+    assert len(set_writes) == 4
+    if not complete_all:
+        # Uncompleted drafts stay drafts rather than becoming false zero results.
+        assert set_writes[1].args[1][1:5] == (None, None, None, None)
+
+
+@pytest.mark.parametrize("reason", ["old", "newer_session", "revision", "active", "cancelled", "empty", "invalid", "missing_set"])
+def test_ineligible_or_invalid_correction_never_writes(monkeypatch, reason):
+    data, connection = correction_fixture(monkeypatch)
+    logs = deepcopy(data["exercises"])
+    revision = 4
+    if reason == "old":
+        connection.execute.return_value.fetchone.return_value["recent"] = False
+    elif reason == "newer_session":
+        connection.execute.return_value.fetchone.return_value["id"] = uuid4()
+    elif reason == "revision":
+        revision = 3
+    elif reason in ("active", "cancelled"):
+        data["status"] = "in_progress" if reason == "active" else "cancelled"
+    elif reason == "empty":
+        logs[0]["sets"][0]["completed"] = False
+    elif reason == "invalid":
+        logs[0]["sets"][0]["weight"] = "-1"
+    else:
+        logs[0]["sets"].pop()
+    with pytest.raises(HTTPException) as failure:
+        workouts.correct_session(connection, data["id"], SaveSession(revision=revision, mutationId=uuid4(), exercises=logs))
+    assert failure.value.status_code == (422 if reason in ("empty", "invalid", "missing_set") else 409)
+    assert all("UPDATE" not in call.args[0] for call in connection.execute.call_args_list)
+
+
+def test_correction_retry_is_acknowledged_without_another_write(monkeypatch):
+    data, connection = correction_fixture(monkeypatch)
+    request = SaveSession(revision=3, mutationId=uuid4(), exercises=data["exercises"])
+    data["lastMutationId"] = str(request.mutationId)
+    assert workouts.correct_session(connection, data["id"], request) == data
+    assert connection.execute.call_count == 1  # Only the shared start/correction lock.
+
+
+def test_correction_endpoint_cannot_report_success_when_commit_fails(boundary, monkeypatch):
+    client, connection, _ = boundary
+    data = session()
+    data.update(status="partial", finishedAt=data["startedAt"] + 1000)
+    monkeypatch.setattr(workouts, "correct_session", lambda *_: data)
+    connection.__exit__.side_effect = psycopg.OperationalError("private details")
+    response = client.put(f'/api/sessions/{data["id"]}/correction', json={
+        "revision": 0, "mutationId": str(uuid4()), "exercises": data["exercises"],
+    })
+    assert response.status_code == 503
+    assert "private details" not in response.text

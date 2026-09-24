@@ -78,6 +78,7 @@ numbered file. The migration runner is explicit, atomic and safe to rerun.
 | GET /api/sessions | Finished sessions with snapshots and actual work |
 | GET /api/sessions/{id} | Retrieve/resume one session |
 | PUT /api/sessions/{id} | Save the ordered exercise/set draft atomically with revision/mutation UUID |
+| PUT /api/sessions/{id}/correction | Correct the latest finished workout without reopening it or changing its dates |
 | POST /api/sessions/{id}/finish | Finish as completed, partial or empty/cancelled |
 | POST /api/set-performances | Original v2 standalone set creation |
 | GET /api/set-performances/latest?exercise=back-squat | Original latest-set retrieval |
@@ -87,6 +88,24 @@ conflicting active/stale session 409, database/configuration errors a sanitized 
 FastAPI `/docs` describes the typed request/response models.
 
 ## Rotation, previous results and progression
+
+### v1.1 corrections after a real workout
+
+The latest completed/partial workout can be corrected within seven days of its
+original finish, provided no newer workout has started (including a later
+cancelled workout). A correction updates existing rows in one transaction,
+checks the revision and mutation UUID, and recalculates completion status and
+feedback. It preserves the session UUID, prescription snapshot and timestamps.
+At least one completed set must remain, so its rotation position cannot disappear.
+The endpoint shares the start-session advisory lock: a new workout cannot take
+a prescription snapshot halfway through a correction. Already-started workouts
+are never rewritten. Correction retries return the previous acknowledgement
+without another write; stale revisions are rejected. No migration is required.
+
+Corrected results feed subsequent history, adherence and recommendations. The
+UI uses an explicit Save corrections action; this editor does not autosave or
+persist an offline draft. Keep it open until saving is confirmed. It is a small
+correction mechanism, not a revision-history/audit-log feature.
 
 Session A (Lower A) -> B (Upper A) -> C (Lower B) -> D (Upper B) -> repeat.
 The next recommendation follows the latest deliberately completed/partial session,

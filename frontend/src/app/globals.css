@@ -16,6 +16,10 @@
 .technique-check { display: flex; align-items: center; gap: 12px; margin-block: 16px; font-size: 14px; line-height: 1.5; }
 .technique-check input { width: 24px; height: 24px; flex-shrink: 0; accent-color: var(--accent); }
 .workout-editing { border: 0; padding: 0; margin: 0; min-width: 0; }
+.range-warning, .starting-load-note { padding: 12px; border-left: 3px solid #d7a56b; color: #f2ce9f; line-height: 1.5; }
+.unfinished-label { color: #f2ce9f; font-size: 13px; }
+.unfinished-summary { border-color: #d7a56b; }
+.unfinished-summary ul { margin: 0; padding-left: 20px; line-height: 1.7; }
 
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--background); color: var(--text); font-family: Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; }

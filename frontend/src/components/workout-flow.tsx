@@ -13,6 +13,8 @@ import { WorkoutHistory } from "./workout-history";
 import { BottomNavigation } from "./bottom-navigation";
 import { Icon } from "./icon";
 import { BackendStatus } from "./backend-status";
+import { BackendWait } from "./backend-wait";
+import { WorkoutCorrection } from "./workout-correction";
 
 const START_KEY = "adaptive-athlete.pending-start.v1";
 const message = (error: unknown) => error instanceof Error ? error.message : "Could not load your workout. Please retry.";
@@ -153,6 +155,18 @@ export function WorkoutFlow() {
   const conflict = recoveryError || (saveView?.status === "conflict" ? saveView.error : "");
   const historySelected = screen.kind === "history" || screen.kind === "history-detail";
 
+  function correctionAction(selected: PersistedSession): (() => void) | undefined {
+    if (active || recoveryError || data?.activeSession || selected.id !== data?.today.lastCompletedWorkout?.id) return undefined;
+    return () => setScreen({ kind: "correction", session: selected });
+  }
+
+  if (screen.kind === "correction") return <div className="app-shell"><main id="main" tabIndex={-1} ref={mainRef}>
+    <BackendWait />
+    <WorkoutCorrection key={screen.session.id} original={screen.session}
+      onCancel={() => { setScreen({ kind: "history" }); void refreshToday(); }}
+      onSaved={(saved) => { setFinished(saved); setScreen({ kind: "complete" }); void refreshToday(); }} />
+  </main></div>;
+
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">Skip to content</a>
@@ -163,6 +177,7 @@ export function WorkoutFlow() {
         <span className="demo-badge">Training log</span>
       </header>
       <main id="main" tabIndex={-1} ref={mainRef}>
+        <BackendWait />
         {loading && <p className="preview-info" role="status">Loading your workouts…</p>}
         {error && <section className="panel sync-panel" role="alert"><p>{error}</p>
           <button className="secondary-button" onClick={() => window.location.reload()}>Reload saved workouts</button></section>}
@@ -192,10 +207,10 @@ export function WorkoutFlow() {
             canFinish={saveView.status === "saved" && !finishing && !finishError} locked={Boolean(finishing || finishError || conflict)}
             onAction={act} onFinish={() => void finish()} onBack={openToday} />
         </>}
-        {screen.kind === "complete" && finished && <WorkoutComplete workout={finished.workout} session={finished} onToday={openToday} />}
+        {screen.kind === "complete" && finished && <WorkoutComplete workout={finished.workout} session={finished} onToday={openToday} onCorrect={correctionAction(finished)} />}
         {screen.kind === "history" && <WorkoutHistory onOpen={(selected) => setScreen({ kind: "history-detail", session: selected })} />}
         {screen.kind === "history-detail" && <WorkoutComplete workout={screen.session.workout} session={screen.session}
-          onToday={() => setScreen({ kind: "history" })} backLabel="Back to History" />}
+          onToday={() => setScreen({ kind: "history" })} backLabel="Back to History" onCorrect={correctionAction(screen.session)} />}
       </main>
       <BackendStatus />
       <BottomNavigation onToday={openToday} isToday={screen.kind === "today"} onHistory={() => setScreen({ kind: "history" })} isHistory={historySelected} />
